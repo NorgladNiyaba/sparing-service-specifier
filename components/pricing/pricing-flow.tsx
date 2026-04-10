@@ -341,6 +341,15 @@ function DetailInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
+function DetailSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={`h-11 w-full rounded-[0.75rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] px-4 text-sm text-[var(--brand-ink)] transition duration-200 focus:border-[var(--brand-red)] focus:bg-[var(--brand-panel)] focus:shadow-[0_0_0_3px_rgba(214,27,23,0.09)] hover:border-[var(--brand-line-strong)] ${props.className ?? ""}`}
+    />
+  );
+}
+
 function SummaryRow({
   label,
   value,
@@ -487,451 +496,359 @@ export function PricingFlow() {
     }));
   };
 
+  const cardWidth =
+    step === "agreement"
+      ? "max-w-3xl"
+      : step === "recommendation"
+        ? "max-w-2xl"
+        : "max-w-md";
+
+  const ctaLabel =
+    step === "budget"
+      ? "See my plan"
+      : step === "agreement"
+        ? "Confirm & proceed to payment"
+        : "Continue";
+
   return (
-    <div className="min-h-screen bg-[var(--page-bg)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--brand-line)] bg-[rgba(var(--page-bg-raw,255,255,255),0.82)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-5 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center">
-            <Image src={logoColor} alt="Sparing Consulting" className="h-8 w-auto" priority />
+    <div className="min-h-screen bg-[#f4f4f6]">
+      {/* Logo above card */}
+      <div className="flex justify-center px-4 pb-6 pt-10">
+        <Image src={logoColor} alt="Sparing Consulting" className="h-9 w-auto" priority />
+      </div>
+
+      {/* Centered card */}
+      <div className={`mx-auto w-full px-4 pb-16 ${cardWidth}`}>
+        <div className="overflow-hidden rounded-[1.5rem] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04),0_16px_40px_rgba(0,0,0,0.08)]">
+
+          {/* Progress inside card */}
+          <div className="px-8 pt-7">
+            <ProgressBar step={step} />
           </div>
-          <div className="hidden text-xs font-medium tabular-nums text-[var(--brand-muted)] sm:block">
-            Step {steps.findIndex((item) => item.id === step) + 1} of {steps.length}
-          </div>
-        </div>
-      </header>
 
-      <main className="mx-auto max-w-5xl px-5 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
-        <ProgressBar step={step} />
+          {/* Step content */}
+          <div className="px-8 py-8">
+            <StepTransition stepKey={step} direction={direction}>
 
-        <div className="mt-4 text-sm leading-6 text-[var(--brand-muted)]">
-          {continuityLabel}
-        </div>
-
-        <div className="mt-10 max-w-2xl">
-          <StepTransition stepKey={step} direction={direction}>
-            {step === "location" ? (
-              <StepFrame
-                eyebrow="Location"
-                title="Where is your business based?"
-              >
-                <SentenceRow>
-                  My business is based in
-                  <InlineTextInput
-                    value={form.city}
-                    onChange={(event) => updateField("city", event.target.value)}
-                    placeholder="city"
-                    className="min-w-[10rem] sm:min-w-[12rem]"
-                  />
-                  ,
-                  <InlineSelect
-                    value={form.stateCode}
-                    onChange={(event) => updateField("stateCode", event.target.value)}
-                  >
-                    <option value="">state</option>
-                    {usStates.map((state) => (
-                      <option key={state.code} value={state.code}>
-                        {state.name}
-                      </option>
-                    ))}
-                  </InlineSelect>
-                  .
-                </SentenceRow>
-              </StepFrame>
-            ) : null}
-
-            {step === "company" ? (
-              <StepFrame
-                eyebrow="Company"
-                title={
-                  !form.businessType
-                    ? "First, which of these feels closest to you?"
-                    : form.businessType === "independent-contractor"
-                      ? "Perfect. We’ll keep this one simple."
-                      : "Great. Let’s get a couple more company details."
-                }
-                note={
-                  !form.businessType
-                    ? "This helps us shape the next questions without making you fill unnecessary fields."
-                    : form.businessType === "independent-contractor"
-                      ? "Independent contractor estimates skip straight to revenue after this."
-                      : "For startups and full businesses, we use the name and team size to shape the recommendation."
-                }
-              >
-                {!form.businessType ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.24 }}
-                  >
-                    <BusinessTypePicker
-                      selectedValue={form.businessType}
-                      onSelect={selectBusinessType}
-                    />
-                  </motion.div>
-                ) : null}
-
-                {form.businessType === "independent-contractor" ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.24 }}
-                    className="space-y-6"
-                  >
-                    <SentenceRow>
-                      You&apos;re operating more as an
-                      <span className="mx-2 inline-flex rounded-full border border-[rgba(214,27,23,0.14)] bg-[var(--brand-red-soft)] px-4 py-2 text-[0.95em] font-medium text-[var(--brand-red)]">
-                        independent contractor
-                      </span>
-                      .
-                    </SentenceRow>
-                    <button
-                      type="button"
-                      onClick={() => updateField("businessType", "")}
-                      className="text-sm font-medium text-[var(--brand-muted)] transition hover:text-[var(--brand-ink)]"
-                    >
-                      Change selection
-                    </button>
-                  </motion.div>
-                ) : null}
-
-                {form.businessType === "startup" || form.businessType === "full-business" ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.24 }}
-                    className="space-y-10"
-                  >
-                    <SentenceRow>
-                      My business is
-                      <InlineTextInput
-                        value={form.companyName}
-                        onChange={(event) => updateField("companyName", event.target.value)}
-                        placeholder="company name"
-                        className="min-w-[14rem] sm:min-w-[18rem]"
+              {/* ── Location ── */}
+              {step === "location" ? (
+                <>
+                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                    Where is your business based?
+                  </h2>
+                  <div className="mt-6 space-y-4">
+                    <DetailField label="City">
+                      <DetailInput
+                        value={form.city}
+                        onChange={(event) => updateField("city", event.target.value)}
+                        placeholder="e.g. Austin"
+                        autoFocus
                       />
-                      .
-                    </SentenceRow>
-
-                    <div className="space-y-3">
-                      <SentenceRow>
-                        We have about
-                        <InlineTextInput
-                          inputMode="numeric"
-                          value={form.employeeCount}
-                          onChange={(event) =>
-                            updateField("employeeCount", normalizeNumberInput(event.target.value))
-                          }
-                          placeholder="0"
-                          className="min-w-[6rem]"
-                        />
-                        people.
-                      </SentenceRow>
-                      <p className="pl-1 text-[0.82rem] text-[var(--brand-muted)]">Estimate is fine.</p>
-                      <ChoiceRow
-                        values={employeePresets}
-                        selectedValue={employeeCount}
-                        onSelect={(value) => updateField("employeeCount", String(value))}
-                        formatter={(value) => `${value} ${value === 1 ? "person" : "people"}`}
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => updateField("businessType", "")}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--brand-muted)] transition hover:-translate-x-0.5 hover:text-[var(--brand-ink)]"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                      </svg>
-                      Change type
-                    </button>
-                  </motion.div>
-                ) : null}
-              </StepFrame>
-            ) : null}
-
-            {step === "budget" ? (
-              <StepFrame
-                eyebrow="Budget"
-                title="Last piece. What revenue are you planning around?"
-                note="We use annual revenue as the base for your monthly support estimate."
-              >
-                <div className="space-y-3">
-                  <SentenceRow>
-                    My business brings in about $
-                    <InlineTextInput
-                      inputMode="numeric"
-                      value={formatInlineNumber(form.annualRevenue)}
-                      onChange={(event) =>
-                        updateField("annualRevenue", normalizeNumberInput(event.target.value))
-                      }
-                      placeholder="annual revenue"
-                      className="min-w-[12rem] sm:min-w-[14rem]"
-                    />
-                    per year.
-                  </SentenceRow>
-                  <p className="pl-1 text-[0.82rem] text-[var(--brand-muted)]">Annual revenue, estimate is fine.</p>
-                  <ChoiceRow
-                    values={revenuePresets}
-                    selectedValue={annualRevenue}
-                    onSelect={(value) => updateField("annualRevenue", String(value))}
-                    formatter={(value) => formatCurrency(value)}
-                  />
-                </div>
-              </StepFrame>
-            ) : null}
-
-            {step === "recommendation" ? (
-              <StepFrame
-                eyebrow="Recommendation"
-                title={`Here's what monthly support looks like for ${companyName}.`}
-                note={recommendation.summary}
-              >
-                <div className="grid gap-12 border-t border-[var(--brand-line)] pt-10 sm:grid-cols-[minmax(0,1fr)_18rem]">
-                  <div>
-                    <div className="text-sm text-[var(--brand-muted)]">Recommended monthly support</div>
-                    <div className="mt-3 text-[clamp(3.5rem,7vw,6rem)] font-semibold leading-none tracking-[-0.07em] text-[var(--brand-ink)]">
-                      {formatCurrency(recommendation.monthlyPrice)}
-                    </div>
-                    <div className="mt-2 text-base text-[var(--brand-muted)]">per month</div>
-                    <div className="mt-10 max-w-xl text-[1.3rem] leading-8 text-[var(--brand-ink)]">
-                      {recommendation.publicPlanName}
-                    </div>
-                    <div className="mt-4 max-w-xl text-base leading-8 text-[var(--brand-muted)]">
-                      {recommendation.audienceLabel}
-                    </div>
+                    </DetailField>
+                    <DetailField label="State">
+                      <DetailSelect
+                        value={form.stateCode}
+                        onChange={(event) => updateField("stateCode", event.target.value)}
+                      >
+                        <option value="">Select a state</option>
+                        {usStates.map((state) => (
+                          <option key={state.code} value={state.code}>{state.name}</option>
+                        ))}
+                      </DetailSelect>
+                    </DetailField>
                   </div>
+                </>
+              ) : null}
 
-                  <div className="border-t border-[var(--brand-line)] pt-8 sm:border-l sm:border-t-0 sm:pl-10 sm:pt-0">
-                    <SummaryRow label="Location" value={form.city && form.stateCode ? `${form.city}, ${getStateName(form.stateCode)}` : "Pending"} />
-                    <SummaryRow label="Employees" value={employeeCount > 0 ? formatNumber(employeeCount) : "Pending"} />
-                    <SummaryRow label="Revenue" value={annualRevenue > 0 ? formatCurrency(annualRevenue) : "Pending"} />
-                    <SummaryRow label="Revenue tier" value={recommendation.tierLabel} />
-                  </div>
-                </div>
+              {/* ── Company ── */}
+              {step === "company" ? (
+                <>
+                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                    {!form.businessType
+                      ? "Which best describes your business?"
+                      : form.businessType === "independent-contractor"
+                        ? "Got it, keeping it simple."
+                        : "A couple more details."}
+                  </h2>
+                  {!form.businessType ? (
+                    <p className="mt-2 text-sm text-[var(--brand-muted)]">
+                      This shapes the questions we ask next.
+                    </p>
+                  ) : null}
+                  <div className="mt-6">
+                    {!form.businessType ? (
+                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }}>
+                        <BusinessTypePicker selectedValue={form.businessType} onSelect={selectBusinessType} />
+                      </motion.div>
+                    ) : null}
 
-                <div className="grid gap-5 border-t border-[var(--brand-line)] pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-                  <div className="rounded-[1.5rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-7">
-                    <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-red)]">
-                      What's included
-                    </div>
-                    <div className="mt-5 space-y-4">
-                      {recommendation.included.map((item) => (
-                        <div key={item} className="flex gap-3 text-base leading-7 text-[var(--brand-muted)]">
-                          <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[var(--brand-red)]" />
-                          <span>{item}</span>
+                    {form.businessType === "independent-contractor" ? (
+                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} className="space-y-5">
+                        <div className="rounded-[0.75rem] border border-[rgba(214,27,23,0.16)] bg-[var(--brand-red-soft)] px-4 py-3 text-sm font-medium text-[var(--brand-red)]">
+                          Independent contractor
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                        <button
+                          type="button"
+                          onClick={() => updateField("businessType", "")}
+                          className="inline-flex items-center gap-1.5 text-sm text-[var(--brand-muted)] transition hover:-translate-x-0.5 hover:text-[var(--brand-ink)]"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                          </svg>
+                          Change type
+                        </button>
+                      </motion.div>
+                    ) : null}
 
-                  <div className="rounded-[1.5rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-7">
-                    <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-red)]">
-                      Breakdown
-                    </div>
-                    <div className="mt-5">
-                      <SummaryRow label="Revenue-based pricing" value={formatCurrency(recommendation.revenuePrice)} />
-                      <SummaryRow label="Team scope" value={formatCurrency(recommendation.employeePrice)} />
-                      <SummaryRow label="Location context" value={formatCurrency(recommendation.locationPrice)} />
-                      <SummaryRow label="Monthly total" value={formatCurrency(recommendation.monthlyPrice)} strong />
-                    </div>
-                    <div className="mt-6 text-sm leading-7 text-[var(--brand-muted)]">
-                      Base pricing starts at {formatCurrency(ecssBaseRate)} per month, adds {formatCurrency(ecssIncrementAmount)} per extra $50K in revenue, and includes {ecssIncludedAgencyNotices} agency notices each month. Additional notices are {formatCurrency(ecssAdditionalAgencyNoticeFee)} each.
-                    </div>
-                  </div>
-                </div>
-
-              </StepFrame>
-            ) : null}
-
-            {step === "agreement" ? (
-              <StepFrame
-                eyebrow="Agreement"
-                title="Let’s finalize the details before payment."
-                note="We’ll use this information to generate the agreement summary and connect payment."
-              >
-                <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-                  <div className="space-y-8">
-                    <div className="rounded-[1.5rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-6 sm:p-7">
-                      <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-red)]">
-                        Contact details
-                      </div>
-                      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                        <DetailField label="Full name">
+                    {form.businessType === "startup" || form.businessType === "full-business" ? (
+                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} className="space-y-5">
+                        <DetailField label="Business name">
                           <DetailInput
-                            value={form.contactName}
-                            onChange={(event) => updateField("contactName", event.target.value)}
-                            placeholder="Your full name"
+                            value={form.companyName}
+                            onChange={(event) => updateField("companyName", event.target.value)}
+                            placeholder="e.g. Acme Corp"
+                            autoFocus
                           />
                         </DetailField>
-                        <DetailField label="Signer title">
-                          <DetailInput
-                            value={form.signerTitle}
-                            onChange={(event) => updateField("signerTitle", event.target.value)}
-                            placeholder="Founder, Owner, CEO"
-                          />
-                        </DetailField>
-                        <DetailField label="Email">
-                          <DetailInput
-                            type="email"
-                            value={form.contactEmail}
-                            onChange={(event) => updateField("contactEmail", event.target.value)}
-                            placeholder="name@company.com"
-                          />
-                        </DetailField>
-                        <DetailField label="Phone">
-                          <DetailInput
-                            value={form.contactPhone}
-                            onChange={(event) => updateField("contactPhone", event.target.value)}
-                            placeholder="(555) 000-0000"
-                          />
-                        </DetailField>
-                        <div className="sm:col-span-2">
-                          <DetailField label="Billing address">
+                        <div className="space-y-3">
+                          <DetailField label="Team size">
                             <DetailInput
-                              value={form.billingAddress}
-                              onChange={(event) => updateField("billingAddress", event.target.value)}
-                              placeholder="Street address"
-                            />
-                          </DetailField>
-                        </div>
-                        <DetailField label="Billing ZIP">
-                          <DetailInput
-                            value={form.billingZip}
-                            onChange={(event) => updateField("billingZip", event.target.value)}
-                            placeholder="ZIP code"
-                          />
-                        </DetailField>
-                      </div>
-                    </div>
-
-                    <div className="rounded-[1.5rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-6 sm:p-7">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-red)]">
-                          Payment details
-                        </div>
-                        <div className="rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-xs font-medium text-[var(--brand-muted)]">
-                          Stripe-style entry
-                        </div>
-                      </div>
-                      <div className="mt-5 grid gap-4">
-                        <DetailField label="Name on card">
-                          <DetailInput
-                            value={form.cardName}
-                            onChange={(event) => updateField("cardName", event.target.value)}
-                            placeholder="Cardholder name"
-                          />
-                        </DetailField>
-                        <DetailField label="Card number">
-                          <DetailInput
-                            value={form.cardNumber}
-                            onChange={(event) => updateField("cardNumber", event.target.value)}
-                            placeholder="1234 1234 1234 1234"
-                            inputMode="numeric"
-                          />
-                        </DetailField>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <DetailField label="Expiry">
-                            <DetailInput
-                              value={form.expiry}
-                              onChange={(event) => updateField("expiry", event.target.value)}
-                              placeholder="MM / YY"
-                            />
-                          </DetailField>
-                          <DetailField label="CVC">
-                            <DetailInput
-                              value={form.cvc}
-                              onChange={(event) => updateField("cvc", event.target.value)}
-                              placeholder="CVC"
                               inputMode="numeric"
+                              value={form.employeeCount}
+                              onChange={(event) => updateField("employeeCount", normalizeNumberInput(event.target.value))}
+                              placeholder="Number of people"
                             />
+                          </DetailField>
+                          <ChoiceRow
+                            values={employeePresets}
+                            selectedValue={employeeCount}
+                            onSelect={(value) => updateField("employeeCount", String(value))}
+                            formatter={(value) => `${value} ${value === 1 ? "person" : "people"}`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateField("businessType", "")}
+                          className="inline-flex items-center gap-1.5 text-sm text-[var(--brand-muted)] transition hover:-translate-x-0.5 hover:text-[var(--brand-ink)]"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                          </svg>
+                          Change type
+                        </button>
+                      </motion.div>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+
+              {/* ── Budget ── */}
+              {step === "budget" ? (
+                <>
+                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                    What&apos;s your annual revenue?
+                  </h2>
+                  <p className="mt-2 text-sm text-[var(--brand-muted)]">Estimate is fine.</p>
+                  <div className="mt-6 space-y-3">
+                    <DetailField label="Annual revenue">
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-[var(--brand-muted)]">$</span>
+                        <DetailInput
+                          inputMode="numeric"
+                          value={formatInlineNumber(form.annualRevenue)}
+                          onChange={(event) => updateField("annualRevenue", normalizeNumberInput(event.target.value))}
+                          placeholder="0"
+                          className="pl-8"
+                          autoFocus
+                        />
+                      </div>
+                    </DetailField>
+                    <ChoiceRow
+                      values={revenuePresets}
+                      selectedValue={annualRevenue}
+                      onSelect={(value) => updateField("annualRevenue", String(value))}
+                      formatter={(value) => formatCurrency(value)}
+                    />
+                  </div>
+                </>
+              ) : null}
+
+              {/* ── Recommendation ── */}
+              {step === "recommendation" ? (
+                <>
+                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                    Here&apos;s what monthly support looks like for {companyName}.
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">{recommendation.summary}</p>
+                  <div className="mt-8 grid gap-10 border-t border-[var(--brand-line)] pt-8 sm:grid-cols-[minmax(0,1fr)_16rem]">
+                    <div>
+                      <div className="text-sm text-[var(--brand-muted)]">Recommended monthly support</div>
+                      <div className="mt-2 text-[clamp(3rem,6vw,5rem)] font-semibold leading-none tracking-[-0.07em] text-[var(--brand-ink)]">
+                        {formatCurrency(recommendation.monthlyPrice)}
+                      </div>
+                      <div className="mt-1.5 text-sm text-[var(--brand-muted)]">per month</div>
+                      <div className="mt-8 text-[1.1rem] font-medium leading-7 text-[var(--brand-ink)]">
+                        {recommendation.publicPlanName}
+                      </div>
+                      <div className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">
+                        {recommendation.audienceLabel}
+                      </div>
+                    </div>
+                    <div className="border-t border-[var(--brand-line)] pt-6 sm:border-l sm:border-t-0 sm:pl-8 sm:pt-0">
+                      <SummaryRow label="Location" value={form.city && form.stateCode ? `${form.city}, ${getStateName(form.stateCode)}` : "Pending"} />
+                      <SummaryRow label="Employees" value={employeeCount > 0 ? formatNumber(employeeCount) : "Pending"} />
+                      <SummaryRow label="Revenue" value={annualRevenue > 0 ? formatCurrency(annualRevenue) : "Pending"} />
+                      <SummaryRow label="Revenue tier" value={recommendation.tierLabel} />
+                    </div>
+                  </div>
+                  <div className="mt-6 grid gap-4 border-t border-[var(--brand-line)] pt-6 lg:grid-cols-2">
+                    <div className="rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">
+                        What&apos;s included
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {recommendation.included.map((item) => (
+                          <div key={item} className="flex gap-2.5 text-sm leading-6 text-[var(--brand-muted)]">
+                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-red)]" />
+                            <span>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">
+                        Breakdown
+                      </div>
+                      <div className="mt-4">
+                        <SummaryRow label="Revenue-based pricing" value={formatCurrency(recommendation.revenuePrice)} />
+                        <SummaryRow label="Team scope" value={formatCurrency(recommendation.employeePrice)} />
+                        <SummaryRow label="Location context" value={formatCurrency(recommendation.locationPrice)} />
+                        <SummaryRow label="Monthly total" value={formatCurrency(recommendation.monthlyPrice)} strong />
+                      </div>
+                      <div className="mt-4 text-xs leading-6 text-[var(--brand-muted)]">
+                        Base pricing starts at {formatCurrency(ecssBaseRate)}/mo, adds {formatCurrency(ecssIncrementAmount)} per extra $50K in revenue, includes {ecssIncludedAgencyNotices} agency notices. Additional notices are {formatCurrency(ecssAdditionalAgencyNoticeFee)} each.
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              {/* ── Agreement ── */}
+              {step === "agreement" ? (
+                <>
+                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                    Let&apos;s finalize the details before payment.
+                  </h2>
+                  <p className="mt-2 text-sm text-[var(--brand-muted)]">
+                    We&apos;ll use this to generate the agreement and connect payment.
+                  </p>
+                  <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
+                    <div className="space-y-6">
+                      <div className="rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-5">
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">Contact details</div>
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                          <DetailField label="Full name">
+                            <DetailInput value={form.contactName} onChange={(e) => updateField("contactName", e.target.value)} placeholder="Your full name" />
+                          </DetailField>
+                          <DetailField label="Signer title">
+                            <DetailInput value={form.signerTitle} onChange={(e) => updateField("signerTitle", e.target.value)} placeholder="Founder, Owner, CEO" />
+                          </DetailField>
+                          <DetailField label="Email">
+                            <DetailInput type="email" value={form.contactEmail} onChange={(e) => updateField("contactEmail", e.target.value)} placeholder="name@company.com" />
+                          </DetailField>
+                          <DetailField label="Phone">
+                            <DetailInput value={form.contactPhone} onChange={(e) => updateField("contactPhone", e.target.value)} placeholder="(555) 000-0000" />
+                          </DetailField>
+                          <div className="sm:col-span-2">
+                            <DetailField label="Billing address">
+                              <DetailInput value={form.billingAddress} onChange={(e) => updateField("billingAddress", e.target.value)} placeholder="Street address" />
+                            </DetailField>
+                          </div>
+                          <DetailField label="Billing ZIP">
+                            <DetailInput value={form.billingZip} onChange={(e) => updateField("billingZip", e.target.value)} placeholder="ZIP code" />
                           </DetailField>
                         </div>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-5">
-                    <div className="rounded-[1.5rem] border border-[var(--brand-line)] bg-white p-6 sm:p-7">
-                      <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-red)]">
-                        Agreement summary
-                      </div>
-                      <div className="mt-5 space-y-4 text-sm leading-7 text-[var(--brand-muted)]">
-                        <p>
-                          This agreement is prepared on {agreementDate} between Sparing Consulting and{" "}
-                          <span className="font-medium text-[var(--brand-ink)]">{companyName}</span>.
-                        </p>
-                        <p>
-                          The client contact is{" "}
-                          <span className="font-medium text-[var(--brand-ink)]">
-                            {form.contactName || "pending signer"}
-                          </span>
-                          {form.signerTitle ? `, ${form.signerTitle}` : ""}.
-                        </p>
-                        <p>
-                          Service will begin for a business operating in{" "}
-                          <span className="font-medium text-[var(--brand-ink)]">
-                            {form.city && form.stateCode
-                              ? `${form.city}, ${getStateName(form.stateCode)}`
-                              : "pending location"}
-                          </span>
-                          , with support aligned to the current intake responses.
-                        </p>
-                        <p>
-                          Monthly service pricing is{" "}
-                          <span className="font-medium text-[var(--brand-ink)]">
-                            {formatCurrency(recommendation.monthlyPrice)}
-                          </span>
-                          , covering the current recommendation and included support scope.
-                        </p>
-                      </div>
-                      <div className="mt-6 border-t border-[var(--brand-line)] pt-5">
-                        <SummaryRow label="Plan" value={recommendation.publicPlanName} />
-                        <SummaryRow label="Monthly total" value={formatCurrency(recommendation.monthlyPrice)} strong />
-                        <SummaryRow label="Revenue tier" value={recommendation.tierLabel} />
+                      <div className="rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-5">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">Payment details</div>
+                          <div className="rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-xs text-[var(--brand-muted)]">Stripe-style entry</div>
+                        </div>
+                        <div className="mt-4 grid gap-4">
+                          <DetailField label="Name on card">
+                            <DetailInput value={form.cardName} onChange={(e) => updateField("cardName", e.target.value)} placeholder="Cardholder name" />
+                          </DetailField>
+                          <DetailField label="Card number">
+                            <DetailInput value={form.cardNumber} onChange={(e) => updateField("cardNumber", e.target.value)} placeholder="1234 1234 1234 1234" inputMode="numeric" />
+                          </DetailField>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <DetailField label="Expiry">
+                              <DetailInput value={form.expiry} onChange={(e) => updateField("expiry", e.target.value)} placeholder="MM / YY" />
+                            </DetailField>
+                            <DetailField label="CVC">
+                              <DetailInput value={form.cvc} onChange={(e) => updateField("cvc", e.target.value)} placeholder="CVC" inputMode="numeric" />
+                            </DetailField>
+                          </div>
+                        </div>
                       </div>
                     </div>
-
-                    <label className="flex gap-3 rounded-[1.25rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-5 text-sm leading-7 text-[var(--brand-muted)]">
-                      <input
-                        type="checkbox"
-                        checked={form.acceptsTerms}
-                        onChange={(event) => updateField("acceptsTerms", event.target.checked)}
-                        className="mt-1 h-4 w-4 accent-[var(--brand-red)]"
-                      />
-                      <span>
-                        I have reviewed the agreement summary, confirm the information entered is correct, and accept the terms so I can proceed to payment.
-                      </span>
-                    </label>
+                    <div className="space-y-4">
+                      <div className="rounded-[1rem] border border-[var(--brand-line)] bg-white p-5">
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">Agreement summary</div>
+                        <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--brand-muted)]">
+                          <p>Prepared on {agreementDate} between Sparing Consulting and <span className="font-medium text-[var(--brand-ink)]">{companyName}</span>.</p>
+                          <p>Contact: <span className="font-medium text-[var(--brand-ink)]">{form.contactName || "pending"}</span>{form.signerTitle ? `, ${form.signerTitle}` : ""}.</p>
+                          <p>Operating in <span className="font-medium text-[var(--brand-ink)]">{form.city && form.stateCode ? `${form.city}, ${getStateName(form.stateCode)}` : "pending location"}</span>.</p>
+                          <p>Monthly total: <span className="font-medium text-[var(--brand-ink)]">{formatCurrency(recommendation.monthlyPrice)}</span>.</p>
+                        </div>
+                        <div className="mt-4 border-t border-[var(--brand-line)] pt-4">
+                          <SummaryRow label="Plan" value={recommendation.publicPlanName} />
+                          <SummaryRow label="Monthly total" value={formatCurrency(recommendation.monthlyPrice)} strong />
+                          <SummaryRow label="Revenue tier" value={recommendation.tierLabel} />
+                        </div>
+                      </div>
+                      <label className="flex gap-3 rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-4 text-sm leading-7 text-[var(--brand-muted)]">
+                        <input
+                          type="checkbox"
+                          checked={form.acceptsTerms}
+                          onChange={(e) => updateField("acceptsTerms", e.target.checked)}
+                          className="mt-1 h-4 w-4 accent-[var(--brand-red)]"
+                        />
+                        <span>I have reviewed the summary and accept the terms to proceed to payment.</span>
+                      </label>
+                    </div>
                   </div>
-                </div>
-              </StepFrame>
-            ) : null}
-          </StepTransition>
+                </>
+              ) : null}
 
-          <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-            {step !== "location" ? <SecondaryButton onClick={previousStep}>Back</SecondaryButton> : null}
-            {step !== "agreement" ? (
-              <PrimaryButton onClick={nextStep} disabled={!canContinue[step]}>
-                {step === "location"
-                  ? "Continue"
-                  : step === "company"
-                    ? "Continue"
-                    : step === "budget"
-                      ? "See my plan"
-                      : "Continue"}
-              </PrimaryButton>
-            ) : (
-              <PrimaryButton disabled={!canContinue.agreement}>
-                Confirm &amp; proceed to payment
-              </PrimaryButton>
-            )}
+            </StepTransition>
           </div>
+
+          {/* CTA pinned to card bottom */}
+          <div className="border-t border-[var(--brand-line)] px-8 pb-8 pt-6">
+            {step !== "location" ? (
+              <button
+                type="button"
+                onClick={previousStep}
+                className="mb-4 inline-flex items-center gap-1.5 text-sm text-[var(--brand-muted)] transition hover:-translate-x-0.5 hover:text-[var(--brand-ink)]"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+                Back
+              </button>
+            ) : null}
+            <PrimaryButton
+              onClick={step !== "agreement" ? nextStep : undefined}
+              disabled={!canContinue[step]}
+              className="w-full justify-center"
+            >
+              {ctaLabel}
+            </PrimaryButton>
+          </div>
+
         </div>
-      </main>
+      </div>
     </div>
   );
 }
