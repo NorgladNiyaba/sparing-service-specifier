@@ -1,8 +1,8 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
 import Image from "next/image";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import logoColor from "@/app-logo-color.png";
 import logoWhite from "@/app-logo-white.png";
@@ -443,6 +443,22 @@ function SecondaryButton({ children, className, ...props }: React.ButtonHTMLAttr
   );
 }
 
+function AnimatedPrice({ value }: { value: number }) {
+  const motionValue = useMotionValue(0);
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const controls = animate(motionValue, value, {
+      duration: 1.4,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    });
+    return controls.stop;
+  }, [value, motionValue]);
+
+  return <span>{formatCurrency(display)}</span>;
+}
+
 export function PricingFlow() {
   const [step, setStep] = useState<Step>("location");
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -545,9 +561,11 @@ export function PricingFlow() {
   const cardWidth =
     step === "agreement"
       ? "max-w-3xl"
-      : step === "recommendation" || step === "company"
-        ? "max-w-2xl"
-        : "max-w-lg";
+      : step === "recommendation"
+        ? "max-w-4xl"
+        : step === "company"
+          ? "max-w-2xl"
+          : "max-w-lg";
 
   const ctaLabel =
     step === "budget"
@@ -728,59 +746,147 @@ export function PricingFlow() {
               {/* ── Recommendation ── */}
               {step === "recommendation" ? (
                 <>
-                  <h2 className="text-[1.5rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
-                    Here&apos;s what monthly support looks like for {companyName}.
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">{recommendation.summary}</p>
-                  <div className="mt-8 grid gap-10 border-t border-[var(--brand-line)] pt-8 sm:grid-cols-[minmax(0,1fr)_16rem]">
-                    <div>
-                      <div className="text-sm text-[var(--brand-muted)]">Recommended monthly support</div>
-                      <div className="mt-2 text-[clamp(3rem,6vw,5rem)] font-semibold leading-none tracking-[-0.07em] text-[var(--brand-ink)]">
-                        {formatCurrency(recommendation.monthlyPrice)}
-                      </div>
-                      <div className="mt-1.5 text-sm text-[var(--brand-muted)]">per month</div>
-                      <div className="mt-8 text-[1.1rem] font-medium leading-7 text-[var(--brand-ink)]">
+                  {/* Dark hero — bleeds to card edges */}
+                  <motion.div
+                    className="-mx-10 -mt-10 mb-10 px-10 py-12"
+                    style={{ background: "linear-gradient(135deg, #1a1a1a 0%, #2a1a1a 100%)" }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    {/* Plan badge */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.15, duration: 0.4 }}
+                      className="inline-flex items-center gap-2 rounded-full border border-[rgba(214,27,23,0.4)] bg-[rgba(214,27,23,0.15)] px-3 py-1"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-red)]" />
+                      <span className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-[var(--brand-red)]">
                         {recommendation.publicPlanName}
-                      </div>
-                      <div className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">
-                        {recommendation.audienceLabel}
-                      </div>
-                    </div>
-                    <div className="border-t border-[var(--brand-line)] pt-6 sm:border-l sm:border-t-0 sm:pl-8 sm:pt-0">
-                      <SummaryRow label="Location" value={form.city && form.stateCode ? `${form.city}, ${getStateName(form.stateCode)}` : "Pending"} />
-                      <SummaryRow label="Employees" value={employeeCount > 0 ? formatNumber(employeeCount) : "Pending"} />
-                      <SummaryRow label="Revenue" value={annualRevenue > 0 ? formatCurrency(annualRevenue) : "Pending"} />
-                      <SummaryRow label="Revenue tier" value={recommendation.tierLabel} />
-                    </div>
-                  </div>
-                  <div className="mt-6 grid gap-4 border-t border-[var(--brand-line)] pt-6 lg:grid-cols-2">
-                    <div className="rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">
+                      </span>
+                    </motion.div>
+
+                    {/* Price */}
+                    <motion.div
+                      className="mt-5 text-[clamp(3.5rem,7vw,6rem)] font-bold leading-none tracking-[-0.06em] text-white"
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.25, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      <AnimatedPrice value={recommendation.monthlyPrice} />
+                    </motion.div>
+
+                    <motion.div
+                      className="mt-2 text-sm text-white/50"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.6 }}
+                    >
+                      per month
+                    </motion.div>
+
+                    <motion.p
+                      className="mt-5 max-w-xl text-sm leading-6 text-white/60"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.7, duration: 0.4 }}
+                    >
+                      {recommendation.summary}
+                    </motion.p>
+
+                    {/* Context chips */}
+                    <motion.div
+                      className="mt-7 flex flex-wrap gap-2"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.8, duration: 0.4 }}
+                    >
+                      {[
+                        form.city && form.stateCode ? `${form.city}, ${getStateName(form.stateCode)}` : null,
+                        employeeCount > 0 ? `${formatNumber(employeeCount)} ${employeeCount === 1 ? "person" : "people"}` : null,
+                        annualRevenue > 0 ? formatCurrency(annualRevenue) + " revenue" : null,
+                        recommendation.tierLabel,
+                      ].filter(Boolean).map((chip) => (
+                        <span
+                          key={chip}
+                          className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-xs font-medium text-white/60"
+                        >
+                          {chip}
+                        </span>
+                      ))}
+                    </motion.div>
+                  </motion.div>
+
+                  {/* Bottom two-column section */}
+                  <div className="grid gap-5 lg:grid-cols-2">
+                    {/* What's included */}
+                    <motion.div
+                      className="rounded-[1.1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-6"
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.55, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-red)]">
                         What&apos;s included
                       </div>
-                      <div className="mt-4 space-y-3">
-                        {recommendation.included.map((item) => (
-                          <div key={item} className="flex gap-2.5 text-sm leading-6 text-[var(--brand-muted)]">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-red)]" />
+                      <div className="mt-5 space-y-3">
+                        {recommendation.included.map((item, i) => (
+                          <motion.div
+                            key={item}
+                            className="flex items-start gap-3 text-sm leading-6 text-[var(--brand-muted)]"
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.65 + i * 0.07, duration: 0.3 }}
+                          >
+                            <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--brand-red)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
                             <span>{item}</span>
-                          </div>
+                          </motion.div>
                         ))}
                       </div>
-                    </div>
-                    <div className="rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">
+                    </motion.div>
+
+                    {/* Breakdown */}
+                    <motion.div
+                      className="rounded-[1.1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-6"
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.65, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-red)]">
                         Breakdown
                       </div>
-                      <div className="mt-4">
-                        <SummaryRow label="Revenue-based pricing" value={formatCurrency(recommendation.revenuePrice)} />
+
+                      {/* Visual proportion bar */}
+                      <div className="mt-5 flex h-2 overflow-hidden rounded-full bg-[var(--brand-line)]">
+                        {[
+                          { value: recommendation.revenuePrice, opacity: "1" },
+                          { value: recommendation.employeePrice, opacity: "0.5" },
+                          { value: recommendation.locationPrice, opacity: "0.28" },
+                        ].filter(s => s.value > 0).map((segment, i) => (
+                          <motion.div
+                            key={i}
+                            className="h-full bg-[var(--brand-red)]"
+                            style={{ opacity: segment.opacity }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(segment.value / recommendation.monthlyPrice) * 100}%` }}
+                            transition={{ delay: 0.75 + i * 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="mt-5">
+                        <SummaryRow label="Revenue-based" value={formatCurrency(recommendation.revenuePrice)} />
                         <SummaryRow label="Team scope" value={formatCurrency(recommendation.employeePrice)} />
-                        <SummaryRow label="Location context" value={formatCurrency(recommendation.locationPrice)} />
+                        <SummaryRow label="Location" value={formatCurrency(recommendation.locationPrice)} />
                         <SummaryRow label="Monthly total" value={formatCurrency(recommendation.monthlyPrice)} strong />
                       </div>
-                      <div className="mt-4 text-xs leading-6 text-[var(--brand-muted)]">
-                        Base pricing starts at {formatCurrency(ecssBaseRate)}/mo, adds {formatCurrency(ecssIncrementAmount)} per extra $50K in revenue, includes {ecssIncludedAgencyNotices} agency notices. Additional notices are {formatCurrency(ecssAdditionalAgencyNoticeFee)} each.
-                      </div>
-                    </div>
+                      <p className="mt-4 text-xs leading-5 text-[var(--brand-muted)]">
+                        Base {formatCurrency(ecssBaseRate)}/mo, +{formatCurrency(ecssIncrementAmount)} per $50K revenue. Includes {ecssIncludedAgencyNotices} agency notices; additional at {formatCurrency(ecssAdditionalAgencyNoticeFee)} each.
+                      </p>
+                    </motion.div>
                   </div>
                 </>
               ) : null}
