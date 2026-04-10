@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import { type ReactNode, useMemo, useState } from "react";
 
-import logoWhite from "@/app-logo-white.png";
+import logoColor from "@/app-logo-color.png";
 import {
   type BusinessType,
   calculateRecommendation,
@@ -186,15 +186,12 @@ function StepFrame({
   note?: string;
 }) {
   return (
-    <section className="rounded-[1.75rem] border border-[var(--brand-line)] bg-[var(--brand-panel)] px-7 py-9 shadow-[0_2px_8px_rgba(16,24,40,0.04),0_16px_40px_rgba(16,24,40,0.03)] sm:px-12 sm:py-12">
-      <div className="inline-flex items-center rounded-full border border-[rgba(214,27,23,0.18)] bg-[var(--brand-red-soft)] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-[var(--brand-red)]">
-        {eyebrow}
-      </div>
-      <h1 className="mt-5 max-w-3xl text-balance text-[clamp(2.2rem,4.5vw,3.8rem)] leading-[1.04] tracking-[-0.05em] text-[var(--brand-ink)]">
+    <section className="py-2">
+      <h1 className="max-w-xl text-balance text-[1.6rem] font-semibold leading-[1.2] tracking-[-0.03em] text-[var(--brand-ink)] sm:text-[1.9rem]">
         {title}
       </h1>
-      {note ? <p className="mt-4 max-w-2xl text-[0.96rem] leading-7 text-[var(--brand-muted)]">{note}</p> : null}
-      <div className="mt-10 space-y-8 sm:mt-12">{children}</div>
+      {note ? <p className="mt-3 max-w-lg text-[0.9rem] leading-6 text-[var(--brand-muted)]">{note}</p> : null}
+      <div className="mt-8 space-y-8">{children}</div>
     </section>
   );
 }
@@ -434,7 +431,7 @@ export function PricingFlow() {
 
   const continuityLabel =
     continuityParts.length > 0
-      ? continuityParts.join("  -  ")
+      ? continuityParts.join(" · ")
       : "A few quick questions to tailor your monthly support estimate.";
 
   const canContinue = {
@@ -494,14 +491,8 @@ export function PricingFlow() {
     <div className="min-h-screen bg-[var(--page-bg)]">
       <header className="sticky top-0 z-20 border-b border-[var(--brand-line)] bg-[rgba(var(--page-bg-raw,255,255,255),0.82)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-5 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="rounded-[1rem] bg-[var(--brand-red)] px-3.5 py-2.5">
-              <Image src={logoWhite} alt="Sparing Consulting" className="h-5 w-auto" priority />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-[var(--brand-ink)]">Sparing Monthly Fit</div>
-              <div className="text-xs text-[var(--brand-muted)]">A simple guided estimate</div>
-            </div>
+          <div className="flex items-center">
+            <Image src={logoColor} alt="Sparing Consulting" className="h-8 w-auto" priority />
           </div>
           <div className="hidden text-xs font-medium tabular-nums text-[var(--brand-muted)] sm:block">
             Step {steps.findIndex((item) => item.id === step) + 1} of {steps.length}
@@ -512,17 +503,16 @@ export function PricingFlow() {
       <main className="mx-auto max-w-5xl px-5 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
         <ProgressBar step={step} />
 
-        <div className="mt-6 max-w-3xl text-sm leading-8 text-[var(--brand-muted)]">
+        <div className="mt-4 text-sm leading-6 text-[var(--brand-muted)]">
           {continuityLabel}
         </div>
 
-        <div className="mt-12 max-w-4xl">
+        <div className="mt-10 max-w-2xl">
           <StepTransition stepKey={step} direction={direction}>
             {step === "location" ? (
               <StepFrame
                 eyebrow="Location"
                 title="Where is your business based?"
-                note="We use your city and state to set the right operating context for your estimate."
               >
                 <SentenceRow>
                   My business is based in
@@ -683,7 +673,7 @@ export function PricingFlow() {
                     />
                     per year.
                   </SentenceRow>
-                  <p className="pl-1 text-[0.82rem] text-[var(--brand-muted)]">Annual revenue — estimate is fine.</p>
+                  <p className="pl-1 text-[0.82rem] text-[var(--brand-muted)]">Annual revenue, estimate is fine.</p>
                   <ChoiceRow
                     values={revenuePresets}
                     selectedValue={annualRevenue}
@@ -922,7 +912,7 @@ export function PricingFlow() {
             ) : null}
           </StepTransition>
 
-          <div className="mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
             {step !== "location" ? <SecondaryButton onClick={previousStep}>Back</SecondaryButton> : null}
             {step !== "agreement" ? (
               <PrimaryButton onClick={nextStep} disabled={!canContinue[step]}>
