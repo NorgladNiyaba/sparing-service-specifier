@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+:root {
+  --page-bg: #ffffff;
+  --brand-surface: #f5f7fa;
+  --brand-panel: #ffffff;
+  --brand-panel-muted: #fbfcfd;
+  --brand-ink: #171717;
+  --brand-muted: #667085;
+  --brand-line: #e4e7ec;
+  --brand-line-strong: #d0d5dd;
+  --brand-red: #d61b17;
+  --brand-red-deep: #b91511;
+  --brand-red-soft: #fbe8e7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--brand-ink);
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(214, 27, 23, 0.018), transparent 0 18%),
+    radial-gradient(circle at 88% 4%, rgba(214, 27, 23, 0.012), transparent 0 16%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.02) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.16), transparent 78%);
+  opacity: 0.1;
+  pointer-events: none;
+  z-index: -1;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+  letter-spacing: -0.04em;
+  font-weight: 700;
+}
+
+button,
+input,
+select,
+textarea {
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--brand-muted) 70%, white);
+}

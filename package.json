@@ -1,0 +1,32 @@
+{
+  "name": "sparing-takein",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sparing Consulting pricing reveal flow prototype",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/three": "^0.183.1",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.5.0",
+    "framer-motion": "^12.38.0",
+    "next": "^16.2.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "three": "^0.183.2"
+  }
+}
