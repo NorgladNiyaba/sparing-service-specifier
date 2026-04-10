@@ -271,47 +271,92 @@ function BusinessTypePicker({
   onSelect: (value: BusinessType) => void;
 }) {
   return (
-    <div className="grid gap-3 pt-2 sm:grid-cols-3">
-      {businessTypeOptions.map((option) => {
+    <div className="grid gap-4 sm:grid-cols-3">
+      {businessTypeOptions.map((option, index) => {
         const selected = selectedValue === option.id;
 
         return (
-          <button
+          <motion.button
             key={option.id}
             type="button"
             onClick={() => onSelect(option.id)}
-            className={`group relative rounded-[1.1rem] border p-4 text-left transition duration-200 sm:p-5 ${
+            initial={{ opacity: 0, y: 18 }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              scale: selected ? [1, 1.04, 0.99, 1] : 1,
+              boxShadow: selected
+                ? "0 0 0 3px rgba(214,27,23,0.12), 0 12px 28px rgba(214,27,23,0.08)"
+                : "0 0 0 0px rgba(214,27,23,0), 0 2px 8px rgba(0,0,0,0.04)",
+            }}
+            transition={{
+              opacity: { delay: index * 0.08, duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+              y: { delay: index * 0.08, duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+              scale: { duration: 0.45, ease: [0.34, 1.56, 0.64, 1] },
+              boxShadow: { duration: 0.3 },
+            }}
+            whileHover={{ y: -4, transition: { duration: 0.2, ease: "easeOut" } }}
+            whileTap={{ scale: 0.97, transition: { duration: 0.1 } }}
+            className={`group relative rounded-[1.2rem] border p-5 text-left ${
               selected
-                ? "border-[rgba(214,27,23,0.22)] bg-[var(--brand-panel)] shadow-[0_0_0_3px_rgba(214,27,23,0.09),0_8px_20px_rgba(214,27,23,0.06)]"
-                : "border-[var(--brand-line)] bg-[var(--brand-panel)] hover:border-[var(--brand-line-strong)] hover:shadow-[0_4px_12px_rgba(16,24,40,0.04)]"
+                ? "border-[rgba(214,27,23,0.22)] bg-white"
+                : "border-[var(--brand-line)] bg-white hover:border-[var(--brand-line-strong)]"
             }`}
           >
+            {/* Animated radio indicator */}
             <div className="flex items-start justify-between gap-3">
-              <div
-                className={`text-sm font-semibold ${
-                  selected ? "text-[var(--brand-red)]" : "text-[var(--brand-ink)]"
-                }`}
+              <motion.span
+                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                animate={{
+                  backgroundColor: selected ? "rgb(214,27,23)" : "transparent",
+                  borderColor: selected ? "rgb(214,27,23)" : "rgb(235,236,239)",
+                  scale: selected ? [1, 1.35, 1] : 1,
+                }}
+                transition={{ duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
+                style={{ border: "1.5px solid" }}
               >
-                {option.label}
-              </div>
-              <span
-                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition duration-200 ${
-                  selected
-                    ? "border-[var(--brand-red)] bg-[var(--brand-red)]"
-                    : "border-[var(--brand-line)] bg-transparent group-hover:border-[var(--brand-line-strong)]"
-                }`}
-              >
-                {selected ? (
-                  <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : null}
-              </span>
+                <AnimatePresence>
+                  {selected ? (
+                    <motion.svg
+                      key="check"
+                      className="h-2.5 w-2.5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={3.5}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      <motion.path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M5 13l4 4L19 7"
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: 1 }}
+                        transition={{ duration: 0.22, ease: "easeOut" }}
+                      />
+                    </motion.svg>
+                  ) : null}
+                </AnimatePresence>
+              </motion.span>
             </div>
+
+            {/* Label */}
+            <motion.div
+              className="mt-4 text-[0.92rem] font-semibold"
+              animate={{ color: selected ? "rgb(214,27,23)" : "rgb(23,23,23)" }}
+              transition={{ duration: 0.2 }}
+            >
+              {option.label}
+            </motion.div>
+
+            {/* Description */}
             <div className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">
               {option.description}
             </div>
-          </button>
+          </motion.button>
         );
       })}
     </div>
@@ -500,7 +545,7 @@ export function PricingFlow() {
   const cardWidth =
     step === "agreement"
       ? "max-w-3xl"
-      : step === "recommendation"
+      : step === "recommendation" || step === "company"
         ? "max-w-2xl"
         : "max-w-lg";
 
