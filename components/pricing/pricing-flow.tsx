@@ -5,6 +5,7 @@ import Image from "next/image";
 import { type ReactNode, useMemo, useState } from "react";
 
 import logoColor from "@/app-logo-color.png";
+import logoWhite from "@/app-logo-white.png";
 import {
   type BusinessType,
   calculateRecommendation,
@@ -336,7 +337,7 @@ function DetailInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`h-11 w-full rounded-[0.75rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] px-4 text-sm text-[var(--brand-ink)] transition duration-200 focus:border-[var(--brand-red)] focus:bg-[var(--brand-panel)] focus:shadow-[0_0_0_3px_rgba(214,27,23,0.09)] hover:border-[var(--brand-line-strong)] ${props.className ?? ""}`}
+      className={`h-12 w-full rounded-[0.85rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] px-4 text-[0.95rem] text-[var(--brand-ink)] transition duration-200 focus:border-[var(--brand-red)] focus:bg-[var(--brand-panel)] focus:shadow-[0_0_0_3px_rgba(214,27,23,0.09)] hover:border-[var(--brand-line-strong)] ${props.className ?? ""}`}
     />
   );
 }
@@ -345,7 +346,7 @@ function DetailSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`h-11 w-full rounded-[0.75rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] px-4 text-sm text-[var(--brand-ink)] transition duration-200 focus:border-[var(--brand-red)] focus:bg-[var(--brand-panel)] focus:shadow-[0_0_0_3px_rgba(214,27,23,0.09)] hover:border-[var(--brand-line-strong)] ${props.className ?? ""}`}
+      className={`h-12 w-full rounded-[0.85rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] px-4 text-[0.95rem] text-[var(--brand-ink)] transition duration-200 focus:border-[var(--brand-red)] focus:bg-[var(--brand-panel)] focus:shadow-[0_0_0_3px_rgba(214,27,23,0.09)] hover:border-[var(--brand-line-strong)] ${props.className ?? ""}`}
     />
   );
 }
@@ -501,7 +502,7 @@ export function PricingFlow() {
       ? "max-w-3xl"
       : step === "recommendation"
         ? "max-w-2xl"
-        : "max-w-md";
+        : "max-w-lg";
 
   const ctaLabel =
     step === "budget"
@@ -511,32 +512,38 @@ export function PricingFlow() {
         : "Continue";
 
   return (
-    <div className="min-h-screen bg-[#f4f4f6]">
-      {/* Logo above card */}
-      <div className="flex justify-center px-4 pb-6 pt-10">
-        <Image src={logoColor} alt="Sparing Consulting" className="h-9 w-auto" priority />
-      </div>
+    <div className="min-h-screen bg-[#f2f2f4]">
+
+      {/* ── Header — dark, matching sparingconsulting.com ── */}
+      <header className="sticky top-0 z-20 bg-[#171717]">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 lg:px-10">
+          <Image src={logoWhite} alt="Sparing Consulting" className="h-6 w-auto" priority />
+          <span className="text-xs font-medium tracking-widest text-white/40 uppercase">
+            Monthly Fit Estimate
+          </span>
+        </div>
+      </header>
 
       {/* Centered card */}
-      <div className={`mx-auto w-full px-4 pb-16 ${cardWidth}`}>
-        <div className="overflow-hidden rounded-[1.5rem] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04),0_16px_40px_rgba(0,0,0,0.08)]">
+      <div className={`mx-auto w-full px-5 pb-20 pt-12 ${cardWidth}`}>
+        <div className="overflow-hidden rounded-[1.75rem] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.04),0_24px_56px_rgba(0,0,0,0.08)]">
 
           {/* Progress inside card */}
-          <div className="px-8 pt-7">
+          <div className="px-10 pt-9">
             <ProgressBar step={step} />
           </div>
 
           {/* Step content */}
-          <div className="px-8 py-8">
+          <div className="px-10 py-10">
             <StepTransition stepKey={step} direction={direction}>
 
               {/* ── Location ── */}
               {step === "location" ? (
                 <>
-                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                  <h2 className="text-[1.5rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
                     Where is your business based?
                   </h2>
-                  <div className="mt-6 space-y-4">
+                  <div className="mt-8 space-y-5">
                     <DetailField label="City">
                       <DetailInput
                         value={form.city}
@@ -563,7 +570,7 @@ export function PricingFlow() {
               {/* ── Company ── */}
               {step === "company" ? (
                 <>
-                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                  <h2 className="text-[1.5rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
                     {!form.businessType
                       ? "Which best describes your business?"
                       : form.businessType === "independent-contractor"
@@ -571,11 +578,11 @@ export function PricingFlow() {
                         : "A couple more details."}
                   </h2>
                   {!form.businessType ? (
-                    <p className="mt-2 text-sm text-[var(--brand-muted)]">
+                    <p className="mt-3 text-sm text-[var(--brand-muted)]">
                       This shapes the questions we ask next.
                     </p>
                   ) : null}
-                  <div className="mt-6">
+                  <div className="mt-8">
                     {!form.businessType ? (
                       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }}>
                         <BusinessTypePicker selectedValue={form.businessType} onSelect={selectBusinessType} />
@@ -601,7 +608,7 @@ export function PricingFlow() {
                     ) : null}
 
                     {form.businessType === "startup" || form.businessType === "full-business" ? (
-                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} className="space-y-5">
+                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} className="space-y-6">
                         <DetailField label="Business name">
                           <DetailInput
                             value={form.companyName}
@@ -645,11 +652,11 @@ export function PricingFlow() {
               {/* ── Budget ── */}
               {step === "budget" ? (
                 <>
-                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                  <h2 className="text-[1.5rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
                     What&apos;s your annual revenue?
                   </h2>
-                  <p className="mt-2 text-sm text-[var(--brand-muted)]">Estimate is fine.</p>
-                  <div className="mt-6 space-y-3">
+                  <p className="mt-3 text-sm text-[var(--brand-muted)]">Estimate is fine.</p>
+                  <div className="mt-8 space-y-4">
                     <DetailField label="Annual revenue">
                       <div className="relative">
                         <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-[var(--brand-muted)]">$</span>
@@ -676,7 +683,7 @@ export function PricingFlow() {
               {/* ── Recommendation ── */}
               {step === "recommendation" ? (
                 <>
-                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                  <h2 className="text-[1.5rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
                     Here&apos;s what monthly support looks like for {companyName}.
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">{recommendation.summary}</p>
@@ -736,7 +743,7 @@ export function PricingFlow() {
               {/* ── Agreement ── */}
               {step === "agreement" ? (
                 <>
-                  <h2 className="text-[1.35rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
+                  <h2 className="text-[1.5rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
                     Let&apos;s finalize the details before payment.
                   </h2>
                   <p className="mt-2 text-sm text-[var(--brand-muted)]">
@@ -825,7 +832,7 @@ export function PricingFlow() {
           </div>
 
           {/* CTA pinned to card bottom */}
-          <div className="border-t border-[var(--brand-line)] px-8 pb-8 pt-6">
+          <div className="border-t border-[var(--brand-line)] px-10 pb-10 pt-7">
             {step !== "location" ? (
               <button
                 type="button"
