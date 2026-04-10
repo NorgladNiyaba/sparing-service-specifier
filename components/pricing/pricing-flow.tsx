@@ -150,6 +150,12 @@ function ProgressBar({ step }: { step: Step }) {
   );
 }
 
+const stepVariants = {
+  initial: (d: number) => ({ opacity: 0, x: d * 32, filter: "blur(3px)" }),
+  animate: { opacity: 1, x: 0, filter: "blur(0px)" },
+  exit: (d: number) => ({ opacity: 0, x: d * -20, filter: "blur(2px)" }),
+};
+
 function StepTransition({
   stepKey,
   direction,
@@ -164,9 +170,10 @@ function StepTransition({
       <motion.div
         key={stepKey}
         custom={direction}
-        initial={(d: number) => ({ opacity: 0, x: d * 32, filter: "blur(3px)" })}
-        animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-        exit={(d: number) => ({ opacity: 0, x: d * -20, filter: "blur(2px)" })}
+        variants={stepVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
         transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
       >
         {children}
@@ -560,7 +567,7 @@ export function PricingFlow() {
 
   const cardWidth =
     step === "agreement"
-      ? "max-w-3xl"
+      ? "max-w-4xl"
       : step === "recommendation"
         ? "max-w-4xl"
         : step === "company"
@@ -571,7 +578,7 @@ export function PricingFlow() {
     step === "budget"
       ? "See my plan"
       : step === "agreement"
-        ? "Confirm & proceed to payment"
+        ? "Confirm & start my plan"
         : "Continue";
 
   return (
@@ -894,85 +901,233 @@ export function PricingFlow() {
               {/* ── Agreement ── */}
               {step === "agreement" ? (
                 <>
-                  <h2 className="text-[1.5rem] font-semibold leading-snug tracking-[-0.025em] text-[var(--brand-ink)]">
-                    Let&apos;s finalize the details before payment.
-                  </h2>
-                  <p className="mt-2 text-sm text-[var(--brand-muted)]">
-                    We&apos;ll use this to generate the agreement and connect payment.
-                  </p>
-                  <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
-                    <div className="space-y-6">
-                      <div className="rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-5">
-                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">Contact details</div>
-                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                          <DetailField label="Full name">
-                            <DetailInput value={form.contactName} onChange={(e) => updateField("contactName", e.target.value)} placeholder="Your full name" />
-                          </DetailField>
-                          <DetailField label="Signer title">
-                            <DetailInput value={form.signerTitle} onChange={(e) => updateField("signerTitle", e.target.value)} placeholder="Founder, Owner, CEO" />
-                          </DetailField>
-                          <DetailField label="Email">
-                            <DetailInput type="email" value={form.contactEmail} onChange={(e) => updateField("contactEmail", e.target.value)} placeholder="name@company.com" />
-                          </DetailField>
-                          <DetailField label="Phone">
-                            <DetailInput value={form.contactPhone} onChange={(e) => updateField("contactPhone", e.target.value)} placeholder="(555) 000-0000" />
-                          </DetailField>
-                          <div className="sm:col-span-2">
-                            <DetailField label="Billing address">
-                              <DetailInput value={form.billingAddress} onChange={(e) => updateField("billingAddress", e.target.value)} placeholder="Street address" />
-                            </DetailField>
-                          </div>
-                          <DetailField label="Billing ZIP">
-                            <DetailInput value={form.billingZip} onChange={(e) => updateField("billingZip", e.target.value)} placeholder="ZIP code" />
-                          </DetailField>
-                        </div>
-                      </div>
-                      <div className="rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-5">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">Payment details</div>
-                          <div className="rounded-full border border-[var(--brand-line)] bg-white px-3 py-1 text-xs text-[var(--brand-muted)]">Stripe-style entry</div>
-                        </div>
-                        <div className="mt-4 grid gap-4">
-                          <DetailField label="Name on card">
-                            <DetailInput value={form.cardName} onChange={(e) => updateField("cardName", e.target.value)} placeholder="Cardholder name" />
-                          </DetailField>
-                          <DetailField label="Card number">
-                            <DetailInput value={form.cardNumber} onChange={(e) => updateField("cardNumber", e.target.value)} placeholder="1234 1234 1234 1234" inputMode="numeric" />
-                          </DetailField>
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <DetailField label="Expiry">
-                              <DetailInput value={form.expiry} onChange={(e) => updateField("expiry", e.target.value)} placeholder="MM / YY" />
-                            </DetailField>
-                            <DetailField label="CVC">
-                              <DetailInput value={form.cvc} onChange={(e) => updateField("cvc", e.target.value)} placeholder="CVC" inputMode="numeric" />
-                            </DetailField>
-                          </div>
-                        </div>
-                      </div>
+                  {/* Dark context strip — full-bleed */}
+                  <motion.div
+                    className="-mx-10 -mt-10 mb-9 flex flex-wrap items-center justify-between gap-4 px-10 py-5"
+                    style={{ background: "linear-gradient(135deg, #1a1a1a 0%, #2a1a1a 100%)" }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(214,27,23,0.4)] bg-[rgba(214,27,23,0.15)] px-3 py-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-red)]" />
+                        <span className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[var(--brand-red)]">
+                          {recommendation.publicPlanName}
+                        </span>
+                      </span>
+                      <span className="text-sm text-white/50">{companyName}</span>
                     </div>
-                    <div className="space-y-4">
-                      <div className="rounded-[1rem] border border-[var(--brand-line)] bg-white p-5">
-                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">Agreement summary</div>
-                        <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--brand-muted)]">
-                          <p>Prepared on {agreementDate} between Sparing Consulting and <span className="font-medium text-[var(--brand-ink)]">{companyName}</span>.</p>
-                          <p>Contact: <span className="font-medium text-[var(--brand-ink)]">{form.contactName || "pending"}</span>{form.signerTitle ? `, ${form.signerTitle}` : ""}.</p>
-                          <p>Operating in <span className="font-medium text-[var(--brand-ink)]">{form.city && form.stateCode ? `${form.city}, ${getStateName(form.stateCode)}` : "pending location"}</span>.</p>
-                          <p>Monthly total: <span className="font-medium text-[var(--brand-ink)]">{formatCurrency(recommendation.monthlyPrice)}</span>.</p>
+                    <div className="flex items-center gap-2">
+                      <svg className="h-3.5 w-3.5 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                      </svg>
+                      <span className="text-base font-bold text-white">
+                        {formatCurrency(recommendation.monthlyPrice)}
+                        <span className="ml-0.5 text-xs font-normal text-white/50">/mo</span>
+                      </span>
+                    </div>
+                  </motion.div>
+
+                  {/* Two-column layout */}
+                  <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem]">
+
+                    {/* LEFT — three numbered sections */}
+                    <div>
+
+                      {/* ① Your details */}
+                      <div className="flex gap-5">
+                        <div className="flex flex-col items-center">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand-ink)] text-xs font-bold text-[var(--page-bg)]">1</div>
+                          <div className="mt-2 w-px flex-1 bg-[var(--brand-line)]" />
                         </div>
-                        <div className="mt-4 border-t border-[var(--brand-line)] pt-4">
-                          <SummaryRow label="Plan" value={recommendation.publicPlanName} />
-                          <SummaryRow label="Monthly total" value={formatCurrency(recommendation.monthlyPrice)} strong />
-                          <SummaryRow label="Revenue tier" value={recommendation.tierLabel} />
+                        <div className="min-w-0 flex-1 pb-9">
+                          <div className="mb-5 text-[0.9rem] font-semibold tracking-[-0.01em] text-[var(--brand-ink)]">Your details</div>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <DetailField label="Full name">
+                              <DetailInput value={form.contactName} onChange={(e) => updateField("contactName", e.target.value)} placeholder="Your full name" autoFocus />
+                            </DetailField>
+                            <DetailField label="Title">
+                              <DetailInput value={form.signerTitle} onChange={(e) => updateField("signerTitle", e.target.value)} placeholder="Founder, Owner, CEO" />
+                            </DetailField>
+                            <DetailField label="Email">
+                              <DetailInput type="email" value={form.contactEmail} onChange={(e) => updateField("contactEmail", e.target.value)} placeholder="name@company.com" />
+                            </DetailField>
+                            <DetailField label="Phone">
+                              <DetailInput value={form.contactPhone} onChange={(e) => updateField("contactPhone", e.target.value)} placeholder="(555) 000-0000" />
+                            </DetailField>
+                          </div>
                         </div>
                       </div>
-                      <label className="flex gap-3 rounded-[1rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-4 text-sm leading-7 text-[var(--brand-muted)]">
+
+                      {/* ② Billing */}
+                      <div className="flex gap-5">
+                        <div className="flex flex-col items-center">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand-ink)] text-xs font-bold text-[var(--page-bg)]">2</div>
+                          <div className="mt-2 w-px flex-1 bg-[var(--brand-line)]" />
+                        </div>
+                        <div className="min-w-0 flex-1 pb-9">
+                          <div className="mb-5 text-[0.9rem] font-semibold tracking-[-0.01em] text-[var(--brand-ink)]">Billing</div>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="sm:col-span-2">
+                              <DetailField label="Billing address">
+                                <DetailInput value={form.billingAddress} onChange={(e) => updateField("billingAddress", e.target.value)} placeholder="Street address" />
+                              </DetailField>
+                            </div>
+                            <DetailField label="ZIP code">
+                              <DetailInput value={form.billingZip} onChange={(e) => updateField("billingZip", e.target.value)} placeholder="ZIP code" inputMode="numeric" />
+                            </DetailField>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ③ Payment */}
+                      <div className="flex gap-5">
+                        <div className="flex flex-col items-center">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand-ink)] text-xs font-bold text-[var(--page-bg)]">3</div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-5 flex items-center justify-between gap-3">
+                            <span className="text-[0.9rem] font-semibold tracking-[-0.01em] text-[var(--brand-ink)]">Payment</span>
+                            {/* Card brand icons */}
+                            <div className="flex items-center gap-1.5">
+                              <svg viewBox="0 0 38 24" className="h-5 w-auto rounded" aria-label="Visa">
+                                <rect width="38" height="24" rx="3" fill="#1A1F71"/>
+                                <text x="19" y="16.5" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="Arial, sans-serif">VISA</text>
+                              </svg>
+                              <svg viewBox="0 0 38 24" className="h-5 w-auto rounded" aria-label="Mastercard">
+                                <rect width="38" height="24" rx="3" fill="#252525"/>
+                                <circle cx="15" cy="12" r="7" fill="#EB001B"/>
+                                <circle cx="23" cy="12" r="7" fill="#F79E1B"/>
+                                <path d="M19 6.8a7 7 0 0 1 0 10.4A7 7 0 0 1 19 6.8z" fill="#FF5F00"/>
+                              </svg>
+                              <svg viewBox="0 0 38 24" className="h-5 w-auto rounded" aria-label="Amex">
+                                <rect width="38" height="24" rx="3" fill="#007BC1"/>
+                                <text x="19" y="16" textAnchor="middle" fill="white" fontSize="8.5" fontWeight="bold" fontFamily="Arial, sans-serif">AMEX</text>
+                              </svg>
+                            </div>
+                          </div>
+                          <div className="grid gap-4">
+                            <DetailField label="Name on card">
+                              <DetailInput value={form.cardName} onChange={(e) => updateField("cardName", e.target.value)} placeholder="Cardholder name" />
+                            </DetailField>
+                            <DetailField label="Card number">
+                              <DetailInput value={form.cardNumber} onChange={(e) => updateField("cardNumber", e.target.value)} placeholder="1234 1234 1234 1234" inputMode="numeric" />
+                            </DetailField>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <DetailField label="Expiry">
+                                <DetailInput value={form.expiry} onChange={(e) => updateField("expiry", e.target.value)} placeholder="MM / YY" />
+                              </DetailField>
+                              <DetailField label="CVC">
+                                <DetailInput value={form.cvc} onChange={(e) => updateField("cvc", e.target.value)} placeholder="CVC" inputMode="numeric" />
+                              </DetailField>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-center gap-2 text-xs text-[var(--brand-muted)]">
+                            <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                            </svg>
+                            Secured with 256-bit encryption
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* RIGHT — sticky order summary */}
+                    <div className="lg:sticky lg:top-28 lg:self-start">
+                      <div className="rounded-[1.25rem] border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] p-6">
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">Order summary</div>
+
+                        {/* Company + plan badge */}
+                        <div className="mt-4">
+                          <div className="text-sm font-medium text-[var(--brand-ink)]">{companyName}</div>
+                          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[rgba(214,27,23,0.2)] bg-[var(--brand-red-soft)] px-2.5 py-0.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-red)]" />
+                            <span className="text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-[var(--brand-red)]">{recommendation.publicPlanName}</span>
+                          </div>
+                        </div>
+
+                        {/* Large price */}
+                        <div className="mt-5 border-t border-[var(--brand-line)] pt-5">
+                          <div className="text-[2.4rem] font-bold leading-none tracking-[-0.04em] text-[var(--brand-ink)]">
+                            {formatCurrency(recommendation.monthlyPrice)}
+                          </div>
+                          <div className="mt-1.5 text-xs text-[var(--brand-muted)]">billed monthly · cancel anytime</div>
+                        </div>
+
+                        {/* Line items */}
+                        <div className="mt-5">
+                          <SummaryRow label="Revenue-based" value={formatCurrency(recommendation.revenuePrice)} />
+                          <SummaryRow label="Team scope" value={formatCurrency(recommendation.employeePrice)} />
+                          <SummaryRow label="Location" value={formatCurrency(recommendation.locationPrice)} />
+                          <SummaryRow label="Monthly total" value={formatCurrency(recommendation.monthlyPrice)} strong />
+                        </div>
+
+                        {/* Trust block */}
+                        <div className="mt-5 flex items-center gap-2 rounded-[0.7rem] border border-[var(--brand-line)] bg-[var(--brand-panel)] px-3 py-2.5 text-xs text-[var(--brand-muted)]">
+                          <svg className="h-3.5 w-3.5 shrink-0 text-[var(--brand-red)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                          </svg>
+                          No long-term contract · Cancel anytime
+                        </div>
+                      </div>
+
+                      {/* Custom animated authorisation checkbox */}
+                      <label
+                        className={`mt-4 flex cursor-pointer items-start gap-3 rounded-[1rem] border p-4 transition-colors duration-300 ${
+                          form.acceptsTerms
+                            ? "border-[rgba(214,27,23,0.25)] bg-[var(--brand-red-soft)]"
+                            : "border-[var(--brand-line)] bg-[var(--brand-panel-muted)]"
+                        }`}
+                      >
                         <input
                           type="checkbox"
                           checked={form.acceptsTerms}
                           onChange={(e) => updateField("acceptsTerms", e.target.checked)}
-                          className="mt-1 h-4 w-4 accent-[var(--brand-red)]"
+                          className="sr-only"
                         />
-                        <span>I have reviewed the summary and accept the terms to proceed to payment.</span>
+                        <motion.div
+                          className="relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[0.3rem]"
+                          animate={{
+                            backgroundColor: form.acceptsTerms ? "rgb(214,27,23)" : "transparent",
+                            borderColor: form.acceptsTerms ? "rgb(214,27,23)" : "rgb(235,236,239)",
+                            scale: form.acceptsTerms ? [1, 1.3, 1] : 1,
+                          }}
+                          transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
+                          style={{ border: "2px solid" }}
+                        >
+                          <AnimatePresence>
+                            {form.acceptsTerms ? (
+                              <motion.svg
+                                key="check"
+                                className="h-3 w-3 text-white"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={3.5}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.12 }}
+                              >
+                                <motion.path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M5 13l4 4L19 7"
+                                  initial={{ pathLength: 0 }}
+                                  animate={{ pathLength: 1 }}
+                                  transition={{ duration: 0.2, ease: "easeOut" }}
+                                />
+                              </motion.svg>
+                            ) : null}
+                          </AnimatePresence>
+                        </motion.div>
+                        <span className="text-xs leading-6 text-[var(--brand-muted)]">
+                          I authorise Sparing Consulting to charge{" "}
+                          <span className="font-semibold text-[var(--brand-ink)]">{formatCurrency(recommendation.monthlyPrice)}/mo</span>{" "}
+                          to the card above, starting today. Cancel any time.
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -996,13 +1151,39 @@ export function PricingFlow() {
                 Back
               </button>
             ) : null}
-            <PrimaryButton
-              onClick={step !== "agreement" ? nextStep : undefined}
-              disabled={!canContinue[step]}
-              className="w-full justify-center"
-            >
-              {ctaLabel}
-            </PrimaryButton>
+            <AnimatePresence mode="wait" initial={false}>
+              {step === "agreement" && !canContinue.agreement ? (
+                <motion.div
+                  key="cta-ghost"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.22 }}
+                  className="flex w-full items-center justify-center gap-2 rounded-full border border-[var(--brand-line)] bg-[var(--brand-panel-muted)] py-3.5 text-sm text-[var(--brand-muted)]"
+                >
+                  <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                  Accept the terms above to continue
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="cta-active"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.22 }}
+                >
+                  <PrimaryButton
+                    onClick={step !== "agreement" ? nextStep : undefined}
+                    disabled={!canContinue[step]}
+                    className="w-full justify-center"
+                  >
+                    {ctaLabel}
+                  </PrimaryButton>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
         </div>
