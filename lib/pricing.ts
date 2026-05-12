@@ -1,16 +1,13 @@
-export const ecssBaseRate = 200;
-export const ecssIncludedRevenue = 100_000;
-export const ecssRevenueStep = 50_000;
-export const ecssIncrementAmount = 75;
-export const ecssMaximumIncrements = 24;
-export const ecssMonthlyPriceCap = 2_000;
 export const ecssIncludedAgencyNotices = 2;
 export const ecssAdditionalAgencyNoticeFee = 100;
+export const icssBaseRate = 150; // starting non-zero ICSS monthly rate
+export const ecssBaseRate = 200; // starting non-zero ECSS monthly rate
 export const icssRevenueLimit = 300_000;
 export const icssEmployeeLimit = 4;
+export const ohssRevenueThreshold = 500_000;
 
-export type ServiceTrack = "icss" | "ecss";
-export type BusinessType = "independent-contractor" | "startup" | "full-business";
+export type ServiceTrack = "icss" | "ecss" | "ohss";
+export type BusinessType = "independent-contractor" | "startup" | "smb";
 
 export type PricingInputs = {
   businessType: BusinessType;
@@ -20,8 +17,7 @@ export type PricingInputs = {
   annualRevenue: number;
 };
 
-export type RevenuePricingBreakdown = {
-  incrementCount: number;
+export type IcssRevenuePricing = {
   monthlyPrice: number;
   tierLabel: string;
 };
@@ -89,96 +85,225 @@ const majorCityKeywords = [
   "houston",
 ];
 
+// ── ICSS tiers ────────────────────────────────────────────────────────────────
+
+type IcssTier = { maxRevenue: number; monthlyPrice: number; label: string };
+
+const icssTiers: IcssTier[] = [
+  { maxRevenue: 50_000,  monthlyPrice: 0,   label: "Up to $50,000" },
+  { maxRevenue: 100_000, monthlyPrice: 150, label: "$50,001 – $100,000" },
+  { maxRevenue: 150_000, monthlyPrice: 200, label: "$100,001 – $150,000" },
+  { maxRevenue: 200_000, monthlyPrice: 250, label: "$150,001 – $200,000" },
+  { maxRevenue: 250_000, monthlyPrice: 300, label: "$200,001 – $250,000" },
+  { maxRevenue: 300_000, monthlyPrice: 350, label: "$250,001 – $300,000" },
+];
+
+// ── ECSS tiers ────────────────────────────────────────────────────────────────
+// Fees from the semi-monthly column, used as the monthly rate per client instruction.
+
+type EcssTier = { maxRevenue: number; monthlyPrice: number; label: string };
+
+const ecssTiers: EcssTier[] = [
+  { maxRevenue: 50_000,  monthlyPrice: 0,   label: "Up to $50,000" },
+  { maxRevenue: 100_000, monthlyPrice: 200, label: "$50,001 – $100,000" },
+  { maxRevenue: 150_000, monthlyPrice: 275, label: "$100,001 – $150,000" },
+  { maxRevenue: 200_000, monthlyPrice: 350, label: "$150,001 – $200,000" },
+  { maxRevenue: 250_000, monthlyPrice: 425, label: "$200,001 – $250,000" },
+  { maxRevenue: 300_000, monthlyPrice: 500, label: "$250,001 – $300,000" },
+  { maxRevenue: 350_000, monthlyPrice: 575, label: "$300,001 – $350,000" },
+  { maxRevenue: 400_000, monthlyPrice: 650, label: "$350,001 – $400,000" },
+  { maxRevenue: 450_000, monthlyPrice: 725, label: "$400,001 – $450,000" },
+  { maxRevenue: 500_000, monthlyPrice: 800, label: "$450,001 – $500,000" },
+];
+
+// ── OHSS tiers ────────────────────────────────────────────────────────────────
+
+type OhssTier = { maxRevenue: number; monthlyPrice: number; label: string };
+
+const ohssTiers: OhssTier[] = [
+  { maxRevenue: 1_000_000,  monthlyPrice: 2_167,  label: "$500,001 – $1,000,000" },
+  { maxRevenue: 1_500_000,  monthlyPrice: 3_250,  label: "$1,000,001 – $1,500,000" },
+  { maxRevenue: 2_000_000,  monthlyPrice: 4_333,  label: "$1,500,001 – $2,000,000" },
+  { maxRevenue: 2_500_000,  monthlyPrice: 5_417,  label: "$2,000,001 – $2,500,000" },
+  { maxRevenue: 3_000_000,  monthlyPrice: 6_500,  label: "$2,500,001 – $3,000,000" },
+  { maxRevenue: 4_000_000,  monthlyPrice: 8_667,  label: "$3,000,001 – $4,000,000" },
+  { maxRevenue: 5_000_000,  monthlyPrice: 10_833, label: "$4,000,001 – $5,000,000" },
+  { maxRevenue: 6_000_000,  monthlyPrice: 13_000, label: "$5,000,001 – $6,000,000" },
+  { maxRevenue: 7_000_000,  monthlyPrice: 15_167, label: "$6,000,001 – $7,000,000" },
+  { maxRevenue: 8_000_000,  monthlyPrice: 17_333, label: "$7,000,001 – $8,000,000" },
+  { maxRevenue: 10_000_000, monthlyPrice: 19_500, label: "$8,000,001 – $10,000,000" },
+];
+
+// ── Pricing calculations ──────────────────────────────────────────────────────
+
+export function calculateIcssRevenuePricing(annualRevenue: number): IcssRevenuePricing {
+  const safeRevenue = normalizeWholeNumber(annualRevenue);
+  const tier = icssTiers.find((t) => safeRevenue <= t.maxRevenue);
+  if (tier) return { monthlyPrice: tier.monthlyPrice, tierLabel: tier.label };
+
+  // Extrapolate above $300K: +$50/mo per $50K band (same step rate as the table)
+  const lastTier = icssTiers[icssTiers.length - 1];
+  const extraBands = Math.ceil((safeRevenue - lastTier.maxRevenue) / 50_000);
+  const monthlyPrice = lastTier.monthlyPrice + extraBands * 50;
+  const bandStart = lastTier.maxRevenue + (extraBands - 1) * 50_000;
+  const bandEnd = lastTier.maxRevenue + extraBands * 50_000;
+  return {
+    monthlyPrice,
+    tierLabel: `${formatCurrency(bandStart + 1)} – ${formatCurrency(bandEnd)}`,
+  };
+}
+
+export function calculateEcssRevenuePricing(annualRevenue: number): { monthlyPrice: number; tierLabel: string } {
+  const safeRevenue = normalizeWholeNumber(annualRevenue);
+  const tier = ecssTiers.find((t) => safeRevenue <= t.maxRevenue) ?? ecssTiers[ecssTiers.length - 1];
+  return { monthlyPrice: tier.monthlyPrice, tierLabel: tier.label };
+}
+
+export function calculateOhssRevenuePricing(annualRevenue: number): { monthlyPrice: number; tierLabel: string } {
+  const safeRevenue = normalizeWholeNumber(annualRevenue);
+  if (safeRevenue > 10_000_000) return { monthlyPrice: 0, tierLabel: "Above $10,000,000" };
+  const tier = ohssTiers.find((t) => safeRevenue <= t.maxRevenue) ?? ohssTiers[ohssTiers.length - 1];
+  return { monthlyPrice: tier.monthlyPrice, tierLabel: tier.label };
+}
+
 export function calculateRecommendation(inputs: PricingInputs): Recommendation {
   const businessType = inputs.businessType;
   const annualRevenue = normalizeWholeNumber(inputs.annualRevenue);
   const employeeCount = normalizeWholeNumber(inputs.employeeCount);
-  const revenueBreakdown = calculateRevenuePricing(annualRevenue);
   const employeeBand = getEmployeeBand(employeeCount);
   const locationPrice = getLocationAdjustment(inputs.stateCode, inputs.city);
-  const serviceTrack = getServiceTrack(businessType, employeeCount, annualRevenue);
-  const monthlyPrice =
-    revenueBreakdown.monthlyPrice + employeeBand.adjustment + locationPrice;
+  const serviceTrack = getServiceTrack(businessType, employeeCount, annualRevenue, inputs.stateCode);
+
+  if (serviceTrack === "ohss") {
+    const ohssRevenue = calculateOhssRevenuePricing(annualRevenue);
+    const isNegotiated = ohssRevenue.monthlyPrice === 0;
+    return {
+      serviceTrack,
+      publicPlanName: "Office Hours Support",
+      audienceLabel: "Best for established businesses needing dedicated, scheduled advisory.",
+      monthlyPrice: ohssRevenue.monthlyPrice,
+      revenuePrice: ohssRevenue.monthlyPrice,
+      employeePrice: 0,
+      locationPrice: 0,
+      tierLabel: ohssRevenue.tierLabel,
+      included: [
+        "Scheduled advisory sessions with your dedicated Sparing advisor",
+        "On-site or virtual operational and compliance support",
+        "Strategic financial planning and reporting guidance",
+        "Full-service back-office coordination",
+        "Custom deliverables and project-based engagements",
+      ],
+      summary: isNegotiated
+        ? "Your operation is at a scale where we build a fully custom engagement. Pricing is negotiated directly."
+        : "Your answers point to the dedicated advisory track for established, complex operations.",
+    };
+  }
 
   if (serviceTrack === "icss") {
-    const isIndependent = businessType === "independent-contractor";
+    const icssRevenue = calculateIcssRevenuePricing(annualRevenue);
+    const monthlyPrice = icssRevenue.monthlyPrice + employeeBand.adjustment + locationPrice;
+
+    const publicPlanName =
+      businessType === "independent-contractor" ? "Independent Support" :
+      businessType === "startup" ? "Startup Support" : "Basic Support";
+
+    const audienceLabel =
+      businessType === "independent-contractor"
+        ? "Best for independent contractors and owner-led businesses."
+        : businessType === "startup"
+          ? "Best for early startups with a small team."
+          : "Best for small businesses with straightforward operational needs.";
+
+    const summary =
+      businessType === "independent-contractor"
+        ? "Your answers point to the smaller-scope support track built for owner-led operations."
+        : businessType === "startup"
+          ? "Your answers point to the startup support track for smaller teams still building their back office."
+          : "Your answers point to the basic support track for small businesses with limited complexity.";
 
     return {
       serviceTrack,
-      publicPlanName: isIndependent ? "Independent Support" : "Startup Support",
-      audienceLabel: isIndependent
-        ? "Best for independent contractors and owner-led businesses."
-        : "Best for early startups with smaller teams.",
+      publicPlanName,
+      audienceLabel,
       monthlyPrice,
-      revenuePrice: revenueBreakdown.monthlyPrice,
+      revenuePrice: icssRevenue.monthlyPrice,
       employeePrice: employeeBand.adjustment,
       locationPrice,
-      tierLabel: revenueBreakdown.tierLabel,
+      tierLabel: icssRevenue.tierLabel,
       included: [
         "Good standing and compliance support",
-        "Federal and state notice management",
-        "QuickBooks setup and account organization",
-        "Limited payroll and payroll tax support",
+        "Federal and state agency notice management",
+        "QuickBooks setup and basic account organisation",
+        "Limited payroll support and payroll tax guidance",
         "Expense classification and receipt tracking",
       ],
-      summary: isIndependent
-        ? "Your answers point to the smaller-scope support track built for owner-led operations."
-        : "Your answers point to the startup support track built for smaller teams still setting up their back office.",
+      summary,
     };
   }
+
+  // ECSS
+  const ecssRevenue = calculateEcssRevenuePricing(annualRevenue);
+  const monthlyPrice = ecssRevenue.monthlyPrice + employeeBand.adjustment + locationPrice;
 
   return {
     serviceTrack,
     publicPlanName: "Growth Support",
-    audienceLabel: "Best for businesses with a growing team or broader admin needs.",
+    audienceLabel: "Best for businesses with a growing team or broader administrative needs.",
     monthlyPrice,
-    revenuePrice: revenueBreakdown.monthlyPrice,
+    revenuePrice: ecssRevenue.monthlyPrice,
     employeePrice: employeeBand.adjustment,
     locationPrice,
-    tierLabel: revenueBreakdown.tierLabel,
+    tierLabel: ecssRevenue.tierLabel,
     included: [
       "Revenue-based monthly support that scales with the business",
-      "Agency notice management with 2 notices included each month",
+      "Agency notice management — 2 notices included per month",
       "Payroll coordination and worker onboarding guidance",
-      "Accounting organization, expense tracking, and tax account support",
+      "Accounting organisation, expense tracking, and tax account support",
       "Compliance and advisory help for a growing operation",
     ],
     summary:
-      "Your answers point to the broader ongoing support track for companies with more team and operating complexity.",
+      "Your answers point to the broader ongoing support track for companies with more team size and operating complexity.",
   };
 }
 
-export function calculateRevenuePricing(annualRevenue: number): RevenuePricingBreakdown {
-  const safeRevenue = normalizeWholeNumber(annualRevenue);
-  const rawIncrementCount =
-    safeRevenue <= ecssIncludedRevenue
-      ? 0
-      : Math.ceil((safeRevenue - ecssIncludedRevenue) / ecssRevenueStep);
-  const incrementCount = Math.min(rawIncrementCount, ecssMaximumIncrements);
-  const monthlyPrice = Math.min(
-    ecssBaseRate + incrementCount * ecssIncrementAmount,
-    ecssMonthlyPriceCap,
-  );
-
-  return {
-    incrementCount,
-    monthlyPrice,
-    tierLabel: getRevenueTierLabel(safeRevenue, incrementCount),
-  };
-}
+const dmvStates = new Set(["DC", "MD", "VA"]);
 
 export function getServiceTrack(
   businessType: BusinessType,
   employeeCount: number,
   annualRevenue: number,
+  stateCode = "",
 ): ServiceTrack {
-  if (businessType === "full-business") {
-    return "ecss";
+  // Independent contractors are always ICSS regardless of revenue
+  if (businessType === "independent-contractor") {
+    return "icss";
+  }
+
+  // OHSS only available in the DMV (DC, MD, VA)
+  if (annualRevenue > ohssRevenueThreshold && dmvStates.has(stateCode)) {
+    return "ohss";
   }
 
   return employeeCount <= icssEmployeeLimit && annualRevenue <= icssRevenueLimit
     ? "icss"
     : "ecss";
+}
+
+// Returns the number of advisory units based on revenue tier (1 unit = 2 hrs/week).
+// Unit counts with .5 increments match the official pricing table.
+export function calculateOhssUnits(annualRevenue: number, _employeeCount: number): number {
+  if (annualRevenue > 10_000_000) return 0;
+  if (annualRevenue > 8_000_000)  return 9;
+  if (annualRevenue > 7_000_000)  return 8;
+  if (annualRevenue > 6_000_000)  return 7;
+  if (annualRevenue > 5_000_000)  return 6;
+  if (annualRevenue > 4_000_000)  return 5;
+  if (annualRevenue > 3_000_000)  return 4;
+  if (annualRevenue > 2_500_000)  return 3;
+  if (annualRevenue > 2_000_000)  return 2.5;
+  if (annualRevenue > 1_500_000)  return 2;
+  if (annualRevenue > 1_000_000)  return 1.5;
+  return 1;
 }
 
 export function getEmployeeBand(employeeCount: number) {
@@ -197,21 +322,6 @@ export function getLocationAdjustment(stateCode: string, city: string) {
     : 0;
 
   return stateAdjustment + cityAdjustment;
-}
-
-function getRevenueTierLabel(annualRevenue: number, incrementCount: number) {
-  if (annualRevenue <= ecssIncludedRevenue) {
-    return "Up to $100,000";
-  }
-
-  if (annualRevenue > 1_300_000) {
-    return "Above $1,300,000";
-  }
-
-  const lowerBound = ecssIncludedRevenue + (incrementCount - 1) * ecssRevenueStep + 1;
-  const upperBound = ecssIncludedRevenue + incrementCount * ecssRevenueStep;
-
-  return `${formatCurrency(lowerBound)} - ${formatCurrency(upperBound)}`;
 }
 
 function normalizeWholeNumber(value: number) {
