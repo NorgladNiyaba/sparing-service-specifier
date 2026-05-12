@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:sparingconsulting.com)",
+      "Bash(curl -s https://sparingconsulting.com)",
+      "Bash(curl -s https://d2suldbqlklxvk.cloudfront.net)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
