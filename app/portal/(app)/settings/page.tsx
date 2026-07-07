@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { usePortalContext } from "@/components/portal/portal-context";
 import type { Client } from "@/lib/supabase/types";
 import { ADVISOR_NAME, ADVISOR_EMAIL } from "@/lib/advisor";
 import { useToast } from "@/components/portal/toast";
@@ -103,6 +104,7 @@ function PasswordField({
 }
 
 export default function SettingsPage() {
+  const { activeClientId } = usePortalContext();
   const [client, setClient] = useState<Client | null>(null);
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
 
@@ -118,17 +120,16 @@ export default function SettingsPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const supabase = createClient();
-    (supabase.from("clients").select("*").maybeSingle() as unknown as Promise<{ data: Client | null }>)
-      .then(({ data }) => { if (data) setClient(data); });
+    if (!activeClientId) return;
+    fetch("/api/portal/client").then((r) => r.ok ? r.json() : null).then((d: Client | null) => { if (d) setClient(d); }).catch(() => {});
     fetch("/api/portal/advisor").then((r) => r.ok ? r.json() : null).then((d: { name: string; email: string } | null) => { if (d) setAdvisor(d); }).catch(() => {});
+    const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       const meta = data?.user?.user_metadata ?? {};
       setHasPassword(!!meta.password_configured);
-      // Default to true if preference not yet set
       setNotifyDocs(meta.notifications_new_documents !== false);
     });
-  }, []);
+  }, [activeClientId]);
 
   async function handleNotifToggle(enabled: boolean) {
     setNotifyDocs(enabled);
@@ -157,16 +158,16 @@ export default function SettingsPage() {
     if (failing) { setPwError(failing.label + " — requirement not met."); return; }
     if (newPw !== confirmPw) { setPwError("Passwords don't match."); return; }
 
+    if (!currentPw.trim()) { setPwError("Please enter your current password."); return; }
+
     setSaving(true);
     const supabase = createClient();
 
-    if (hasPassword) {
-      const userRes = await supabase.auth.getUser();
-      const email = userRes.data?.user?.email;
-      if (!email) { setPwError("Could not verify your identity."); setSaving(false); return; }
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPw });
-      if (signInError) { setPwError("Current password is incorrect."); setSaving(false); return; }
-    }
+    const userRes = await supabase.auth.getUser();
+    const email = userRes.data?.user?.email;
+    if (!email) { setPwError("Could not verify your identity."); setSaving(false); return; }
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPw });
+    if (signInError) { setPwError("Current password is incorrect."); setSaving(false); return; }
 
     const { error } = await supabase.auth.updateUser({ password: newPw, data: { password_configured: true } });
     setSaving(false);
@@ -221,24 +222,18 @@ export default function SettingsPage() {
 
         {/* Password */}
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.38, delay: 0.16 }} className="rounded-2xl border bg-white p-6" style={{ borderColor: "#ebecef", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-          <h2 className="mb-1 text-sm font-semibold" style={{ color: "#171717" }}>
-            {hasPassword === false ? "Set a password" : "Change password"}
-          </h2>
+          <h2 className="mb-1 text-sm font-semibold" style={{ color: "#171717" }}>Change password</h2>
           <p className="mb-5 text-xs" style={{ color: "#9ca3af" }}>
-            {hasPassword === false
-              ? "You were signed in automatically after signing your agreement. Set a password to log in from any device."
-              : "Update your password. You'll need to enter your current password to confirm."}
+            Update your password. You&apos;ll need to enter your current password to confirm.
           </p>
 
           <form onSubmit={handleSave} className="space-y-4">
-            {hasPassword && (
-              <PasswordField
-                label="Current password"
-                value={currentPw}
-                onChange={setCurrentPw}
-                autoComplete="current-password"
-              />
-            )}
+            <PasswordField
+              label="Current password"
+              value={currentPw}
+              onChange={setCurrentPw}
+              autoComplete="current-password"
+            />
 
             <PasswordField label="New password" value={newPw} onChange={setNewPw} />
 
@@ -301,7 +296,7 @@ export default function SettingsPage() {
                 className="rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-85 disabled:opacity-50"
                 style={{ background: "#d61b17" }}
               >
-                {saving ? "Saving…" : hasPassword === false ? "Set password" : "Update password"}
+                {saving ? "Saving…" : "Update password"}
               </button>
               {saved && (
                 <motion.span initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "#059669" }}>

@@ -98,11 +98,7 @@ export default function AdminSidebar() {
     <aside className="flex h-screen w-[220px] shrink-0 flex-col" style={{ background: "#080c18", borderRight: "1px solid rgba(255,255,255,0.07)" }}>
       <div className="px-5 pb-5 pt-7">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: "#1d4ed8" }}>
-            <svg className="h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-            </svg>
-          </div>
+          <img src="/logo.png" alt="Sparing" className="h-7 w-7 shrink-0" />
           <div>
             <div className="text-[0.82rem] font-semibold leading-none tracking-[0.01em]" style={{ color: "rgba(255,255,255,0.9)" }}>Sparing</div>
             <div className="mt-0.5 text-[0.62rem] font-medium tracking-[0.06em]" style={{ color: "rgba(255,255,255,0.3)" }}>ADMIN</div>

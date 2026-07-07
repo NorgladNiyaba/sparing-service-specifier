@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-import type { Client } from "@/lib/supabase/types";
+import { usePortalContext } from "@/components/portal/portal-context";
 
 const NAV = [
   {
@@ -82,23 +82,52 @@ interface SidebarProps {
 
 function SidebarContent({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
-  const [client,       setClient]       = useState<Pick<Client, "full_name" | "company_name" | "service_track"> | null>(null);
+  const { activeClientId, availableClients, switchCompany } = usePortalContext();
   const [newDocCount,  setNewDocCount]  = useState(0);
   const [newMsgCount,  setNewMsgCount]  = useState(0);
+  const [switchOpen,   setSwitchOpen]   = useState(false);
+  const switchRef = useRef<HTMLDivElement>(null);
+
+  // Fetch unseen doc count whenever active company changes
+  useEffect(() => {
+    if (!activeClientId) return;
+    fetch("/api/portal/documents")
+      .then((r) => r.json())
+      .then((d: { documents?: Array<{ is_seen: boolean }> }) => {
+        setNewDocCount(d.documents?.filter((doc) => !doc.is_seen).length ?? 0);
+      })
+      .catch(() => {});
+  }, [activeClientId]);
+
+  // Close switcher when clicking outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (switchRef.current && !switchRef.current.contains(e.target as Node)) setSwitchOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  async function handleSwitch(clientId: string) {
+    setSwitchOpen(false);
+    if (clientId === activeClientId) return;
+    await switchCompany(clientId);
+  }
+
+  const activeCompany = availableClients.find((c) => c.clientId === activeClientId);
 
   useEffect(() => {
-    const supabase = createClient();
-    (supabase.from("clients").select("full_name, company_name, service_track").maybeSingle() as unknown as Promise<{ data: Pick<Client, "full_name" | "company_name" | "service_track"> | null }>)
-      .then(({ data }) => { if (data) setClient(data); });
-    (supabase.from("client_documents").select("id").eq("is_seen" as string, false) as unknown as Promise<{ data: { id: string }[] | null }>)
-      .then(({ data }) => setNewDocCount(data?.length ?? 0));
-    // Unread messages from advisor
-    fetch("/api/portal/messages")
-      .then((r) => r.json())
-      .then((msgs: Array<{ sender: string; is_read: boolean }>) => {
-        if (Array.isArray(msgs)) setNewMsgCount(msgs.filter((m) => m.sender === "advisor" && !m.is_read).length);
-      }).catch(() => {});
-  }, []);
+    if (!activeClientId) return;
+    function fetchUnreadCount() {
+      fetch("/api/portal/messages/unread-count")
+        .then((r) => r.json())
+        .then((data: { count: number }) => { setNewMsgCount(data.count ?? 0); })
+        .catch(() => {});
+    }
+    fetchUnreadCount();
+    const id = setInterval(fetchUnreadCount, 30_000);
+    return () => clearInterval(id);
+  }, [activeClientId]);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -106,8 +135,8 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
     window.location.href = "https://sparingconsulting.com";
   }
 
-  const initials = client?.full_name
-    ? client.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+  const initials = activeCompany?.fullName
+    ? activeCompany.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : "…";
 
   return (
@@ -115,13 +144,7 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
       {/* Logo */}
       <div className="flex items-center justify-between px-5 pb-5 pt-7">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: "#d61b17" }}>
-            <svg className="h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-          </div>
+          <img src="/logo.png" alt="Sparing" className="h-7 w-7 shrink-0" />
           <div>
             <div className="text-[0.82rem] font-semibold leading-none tracking-[0.01em]" style={{ color: "rgba(255,255,255,0.9)" }}>Sparing</div>
             <div className="mt-0.5 text-[0.62rem] font-medium tracking-[0.06em]" style={{ color: "rgba(255,255,255,0.3)" }}>CLIENT PORTAL</div>
@@ -141,6 +164,63 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="mx-5 mb-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }} />
+
+      {/* Company switcher — only shown when user has 2+ companies */}
+      {availableClients.length > 1 && (
+        <div ref={switchRef} className="relative mx-3 mb-3">
+          <button
+            onClick={() => setSwitchOpen((o) => !o)}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors"
+            style={{ background: "rgba(255,255,255,0.05)" }}
+          >
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[0.55rem] font-bold text-white" style={{ background: "#d61b17" }}>
+              {(activeCompany?.companyName ?? activeCompany?.fullName ?? "")
+                .split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[0.75rem] font-semibold leading-none" style={{ color: "rgba(255,255,255,0.85)" }}>
+                {activeCompany?.companyName ?? activeCompany?.fullName ?? "—"}
+              </p>
+              <p className="mt-0.5 text-[0.6rem]" style={{ color: "rgba(255,255,255,0.28)" }}>Switch company</p>
+            </div>
+            <svg className="h-3 w-3 shrink-0 transition-transform" style={{ color: "rgba(255,255,255,0.3)", transform: switchOpen ? "rotate(180deg)" : undefined }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <AnimatePresence>
+            {switchOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                transition={{ duration: 0.15 }}
+                className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl py-1 shadow-xl"
+                style={{ background: "#1a1a1e", border: "1px solid rgba(255,255,255,0.09)" }}
+              >
+                {availableClients.map((co) => (
+                  <button
+                    key={co.clientId}
+                    onClick={() => void handleSwitch(co.clientId)}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-white/5"
+                  >
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[0.5rem] font-bold text-white" style={{ background: co.clientId === activeClientId ? "#d61b17" : "rgba(255,255,255,0.12)" }}>
+                      {(co.companyName ?? co.fullName).split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="min-w-0 flex-1 truncate text-[0.75rem] font-medium" style={{ color: co.clientId === activeClientId ? "#ffffff" : "rgba(255,255,255,0.55)" }}>
+                      {co.companyName ?? co.fullName}
+                    </span>
+                    {co.clientId === activeClientId && (
+                      <svg className="h-3 w-3 shrink-0" style={{ color: "#d61b17" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 px-3">
@@ -184,14 +264,8 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
           </div>
           <div className="min-w-0">
             <div className="truncate text-[0.8rem] font-semibold leading-snug" style={{ color: "rgba(255,255,255,0.85)" }}>
-              {client?.full_name ?? "—"}
+              {activeCompany?.companyName ?? activeCompany?.fullName ?? "—"}
             </div>
-            {client?.service_track && (
-              <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.58rem] font-bold uppercase tracking-[0.1em]" style={{ background: "rgba(214,27,23,0.18)", color: "#f87171" }}>
-                <span className="h-1 w-1 rounded-full" style={{ background: "#f87171" }} />
-                {client.service_track}
-              </span>
-            )}
           </div>
         </div>
         <button

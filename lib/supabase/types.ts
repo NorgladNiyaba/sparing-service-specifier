@@ -57,6 +57,7 @@ export interface ClientRow {
   billing_zip: string | null;
   internal_notes: string | null;
   advisor_id: string | null;
+  stripe_customer_id: string | null;
   signed_at: string;
   created_at: string;
   updated_at: string;
@@ -88,7 +89,7 @@ export interface ClientDocumentRow {
   storage_path: string;
   size_bytes: number | null;
   is_seen: boolean;
-  folder: string | null;
+  folder_id: string | null;
   created_at: string;
 }
 
@@ -99,20 +100,24 @@ export interface ClientDocumentInsert {
   storage_path: string;
   size_bytes?: number | null;
   is_seen?: boolean;
-  folder?: string | null;
+  folder_id?: string | null;
 }
 
 export interface ClientFolderRow {
   id: string;
   client_id: string;
   name: string;
+  parent_id: string | null;
   created_at: string;
 }
 
 export interface ClientFolderInsert {
   client_id: string;
   name: string;
+  parent_id?: string | null;
 }
+
+export type ClientFolderTree = ClientFolderRow & { children: ClientFolderTree[] };
 
 export interface ClientUploadRow {
   id: string;
@@ -135,7 +140,7 @@ export interface UploadRequestRow {
   token: string;
   client_id: string;
   label: string;
-  target_folder: string;
+  target_folder_id: string | null;
   max_files: number;
   file_count: number;
   expires_at: string;
@@ -192,7 +197,25 @@ export interface PaymentRecordInsert {
   note?:      string | null;
 }
 
+export interface ContactRow {
+  id:           string;
+  auth_user_id: string | null;
+  full_name:    string;
+  email:        string;
+  created_at:   string;
+}
+
+export interface ContactClientAccessRow {
+  id:         string;
+  contact_id: string;
+  client_id:  string;
+  role:       "owner" | "member";
+  created_at: string;
+}
+
 // Convenience aliases
+export type Contact = ContactRow;
+export type ContactClientAccess = ContactClientAccessRow;
 export type Advisor = AdvisorRow;
 export type Client = ClientRow;
 export type ClientDocument = ClientDocumentRow;

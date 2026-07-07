@@ -1,25 +1,13 @@
-﻿import { createServerClient } from "@supabase/ssr";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { generateToken } from "@/lib/secure-link";
-import { cookies } from "next/headers";
+import { getAdminUser } from "@/lib/admin-auth";
 import { NextResponse, type NextRequest } from "next/server";
-
-async function isAdmin(): Promise<boolean> {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-  );
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.email === process.env.ADMIN_EMAIL;
-}
 
 export async function POST(request: NextRequest) {
   const actor = await getAdminUser(); if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { clientId, label, targetFolder, maxFiles, expiryDays } = await request.json();
-  if (!clientId || !label || !targetFolder || !maxFiles || !expiryDays) {
+  const { clientId, label, targetFolderId, maxFiles, expiryDays } = await request.json();
+  if (!clientId || !label || !targetFolderId || !maxFiles || !expiryDays) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
@@ -29,7 +17,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await admin
     .from("upload_requests")
-    .insert({ token, client_id: clientId, label, target_folder: targetFolder, max_files: maxFiles, expires_at: expiresAt })
+    .insert({ token, client_id: clientId, label, target_folder_id: targetFolderId, max_files: maxFiles, expires_at: expiresAt })
     .select()
     .single();
 

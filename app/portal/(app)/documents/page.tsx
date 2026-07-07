@@ -1,11 +1,12 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState, Fragment } from "react";
 import { SkeletonDocRow, SkeletonFolderCard } from "@/components/portal/portal-skeleton";
 import { EmptyState } from "@/components/portal/empty-state";
 import { DocPreviewModal } from "@/components/portal/doc-preview-modal";
+import { usePortalContext } from "@/components/portal/portal-context";
+import { getFolderBreadcrumbs } from "@/lib/folder-utils";
 import type { ClientDocument, ClientFolder } from "@/lib/supabase/types";
 
 function formatBytes(bytes: number | null): string {
@@ -26,52 +27,61 @@ const TYPE_STYLE: Record<string, { bg: string; text: string }> = {
 };
 
 export default function DocumentsPage() {
-  const [folders,   setFolders]   = useState<ClientFolder[]>([]);
-  const [documents, setDocuments] = useState<ClientDocument[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [openFolder,  setOpenFolder]  = useState<string | null>(null);
-  const [previewDoc, setPreviewDoc] = useState<ClientDocument | null>(null);
+  const { activeClientId } = usePortalContext();
+  const [folders,    setFolders]    = useState<ClientFolder[]>([]);
+  const [documents,  setDocuments]  = useState<ClientDocument[]>([]);
+  const [loading,         setLoading]         = useState(true);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [previewDoc,      setPreviewDoc]      = useState<ClientDocument | null>(null);
 
   useEffect(() => {
-    const supabase = createClient();
-    Promise.all([
-      supabase.from("client_folders").select("*").order("name") as unknown as Promise<{ data: ClientFolder[] | null }>,
-      supabase.from("client_documents").select("*").order("created_at", { ascending: false }) as unknown as Promise<{ data: ClientDocument[] | null }>,
-    ]).then(([foldersRes, docsRes]) => {
-      setFolders(foldersRes.data ?? []);
-      setDocuments(docsRes.data ?? []);
-      setLoading(false);
-    });
-  }, []);
+    if (!activeClientId) return;
+    setLoading(true);
+    setCurrentFolderId(null);
+    fetch("/api/portal/documents")
+      .then((r) => r.json())
+      .then((d: { folders: ClientFolder[]; documents: ClientDocument[] }) => {
+        setFolders(d.folders ?? []);
+        setDocuments(d.documents ?? []);
+        setLoading(false);
+      });
+  }, [activeClientId]);
 
   function openDoc(doc: ClientDocument) {
-    // Mark as seen immediately in local state
     if (!doc.is_seen) {
       setDocuments((prev) => prev.map((d) => d.id === doc.id ? { ...d, is_seen: true } : d));
-      const supabase = createClient();
-      void (supabase.from("client_documents").update({ is_seen: true } as Record<string, unknown>).eq("id", doc.id) as unknown as Promise<unknown>);
+      void fetch("/api/portal/documents", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ id: doc.id }),
+      });
     }
     setPreviewDoc(doc);
   }
 
-  const docsInFolder = (folderName: string) => documents.filter((d) => d.folder === folderName);
-  const newInFolder  = (folderName: string) => docsInFolder(folderName).filter((d) => !d.is_seen).length;
+  const docsInFolder   = (folderId: string) => documents.filter((d) => d.folder_id === folderId);
+  const newInFolder    = (folderId: string) => docsInFolder(folderId).filter((d) => !d.is_seen).length;
+  const childFolders   = (parentId: string | null) => folders.filter((f) => f.parent_id === parentId);
+  const breadcrumbs    = currentFolderId ? getFolderBreadcrumbs(currentFolderId, folders) : [];
+  const currentChildren = childFolders(currentFolderId);
+  const currentDocs     = currentFolderId ? docsInFolder(currentFolderId) : [];
 
   return (
     <div className="min-h-full px-4 py-8 sm:px-6">
       <DocPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
       <AnimatePresence mode="wait">
-        {openFolder ? (
+        {currentFolderId ? (
           <motion.div
-            key={openFolder}
+            key={currentFolderId}
             initial={{ opacity: 0, x: 16 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -16 }}
             transition={{ duration: 0.22 }}
           >
-            <div className="mb-6 flex items-center gap-3">
+            {/* Breadcrumb */}
+            <div className="mb-6 flex items-center gap-2 flex-wrap">
               <button
-                onClick={() => setOpenFolder(null)}
+                onClick={() => setCurrentFolderId(null)}
                 className="flex items-center gap-1.5 text-sm transition-colors"
                 style={{ color: "#9ca3af" }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = "#d61b17")}
@@ -82,21 +92,55 @@ export default function DocumentsPage() {
                 </svg>
                 All folders
               </button>
-              <span style={{ color: "#d8dbe1" }}>/</span>
-              <h1 className="text-sm font-semibold" style={{ color: "#171717" }}>{openFolder}</h1>
+              {breadcrumbs.map((bc, i) => (
+                <Fragment key={bc.id}>
+                  <span style={{ color: "#d8dbe1" }}>/</span>
+                  {i < breadcrumbs.length - 1 ? (
+                    <button onClick={() => setCurrentFolderId(bc.id)} className="text-sm transition-colors" style={{ color: "#6b7280" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "#d61b17")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "#6b7280")}>{bc.name}</button>
+                  ) : (
+                    <h1 className="text-sm font-semibold" style={{ color: "#171717" }}>{bc.name}</h1>
+                  )}
+                </Fragment>
+              ))}
             </div>
 
-            {docsInFolder(openFolder).length === 0 ? (
+            {/* Subfolders */}
+            {currentChildren.length > 0 && (
+              <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {currentChildren.map((subfolder) => {
+                  const count = docsInFolder(subfolder.id).length;
+                  const newCount = newInFolder(subfolder.id);
+                  return (
+                    <button key={subfolder.id} onClick={() => setCurrentFolderId(subfolder.id)}
+                      className="group flex flex-col rounded-2xl border bg-white p-4 text-left transition hover:border-[#d8dbe1] hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]"
+                      style={{ borderColor: newCount > 0 ? "rgba(214,27,23,0.25)" : "#ebecef" }}>
+                      <div className="mb-3 flex items-center justify-between">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl transition group-hover:bg-[rgba(214,27,23,0.1)]" style={{ background: "rgba(214,27,23,0.06)" }}>
+                          <svg className="h-5 w-5" style={{ color: "#d61b17" }} fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                        </div>
+                        {newCount > 0 && <span className="rounded-full px-1.5 py-0.5 text-[0.6rem] font-bold leading-none text-white" style={{ background: "#d61b17" }}>{newCount}</span>}
+                      </div>
+                      <p className="text-[0.82rem] font-semibold leading-snug" style={{ color: "#171717" }}>{subfolder.name}</p>
+                      <p className="mt-1 text-xs" style={{ color: "#9ca3af" }}>{count === 0 ? "Empty" : `${count} file${count !== 1 ? "s" : ""}`}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {currentDocs.length === 0 && currentChildren.length === 0 ? (
               <EmptyState
                 illustration="documents"
                 title="This folder is empty"
-                body={openFolder === "Client Uploads"
+                body={breadcrumbs[0]?.name === "Collection Files"
                   ? "Files you send via the Uploads page will appear here."
                   : "Your advisor will upload files here when ready."}
               />
-            ) : (
+            ) : currentDocs.length > 0 ? (
               <div className="space-y-2">
-                {docsInFolder(openFolder).map((doc, i) => {
+                {currentDocs.map((doc, i) => {
                   const colors = TYPE_STYLE[doc.type] ?? { bg: "rgba(0,0,0,0.05)", text: "#6b7280" };
                   return (
                     <motion.div
@@ -146,7 +190,7 @@ export default function DocumentsPage() {
                   );
                 })}
               </div>
-            )}
+            ) : null}
           </motion.div>
         ) : (
           <motion.div
@@ -165,7 +209,7 @@ export default function DocumentsPage() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {[1, 2, 3, 4].map((i) => <SkeletonFolderCard key={i} />)}
               </div>
-            ) : folders.length === 0 ? (
+            ) : childFolders(null).length === 0 ? (
               <EmptyState
                 illustration="folder"
                 title="No folders yet"
@@ -173,16 +217,16 @@ export default function DocumentsPage() {
               />
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {folders.map((folder, i) => {
-                  const count = docsInFolder(folder.name).length;
-                  const newCount = newInFolder(folder.name);
+                {childFolders(null).map((folder, i) => {
+                  const count = docsInFolder(folder.id).length;
+                  const newCount = newInFolder(folder.id);
                   return (
                     <motion.button
                       key={folder.id}
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, delay: i * 0.025 }}
-                      onClick={() => setOpenFolder(folder.name)}
+                      onClick={() => setCurrentFolderId(folder.id)}
                       className="group flex flex-col rounded-2xl border bg-white p-4 text-left transition hover:border-[#d8dbe1] hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]"
                       style={{ borderColor: newCount > 0 ? "rgba(214,27,23,0.25)" : "#ebecef" }}
                     >

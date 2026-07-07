@@ -3,10 +3,10 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { SkeletonStatCard, SkeletonDocRow, SkeletonWelcomeBanner } from "@/components/portal/portal-skeleton";
 import { EmptyState } from "@/components/portal/empty-state";
 import { DocPreviewModal } from "@/components/portal/doc-preview-modal";
+import { usePortalContext } from "@/components/portal/portal-context";
 import type { Client, ClientDocument } from "@/lib/supabase/types";
 import { ADVISOR_NAME, ADVISOR_EMAIL } from "@/lib/advisor";
 
@@ -51,31 +51,33 @@ function StatCard({ label, value, sub, delay = 0 }: { label: string; value: Reac
 }
 
 export default function DashboardPage() {
+  const { activeClientId } = usePortalContext();
   const [client,       setClient]       = useState<Client | null>(null);
   const [recentDocs,   setRecentDocs]   = useState<ClientDocument[]>([]);
   const [newDocCount,  setNewDocCount]  = useState(0);
   const [uploadCount,  setUploadCount]  = useState(0);
-  const [loading,     setLoading]     = useState(true);
-  const [previewDoc, setPreviewDoc] = useState<ClientDocument | null>(null);
-  const [advisor,    setAdvisor]    = useState<{ name: string; email: string } | null>(null);
+  const [loading,      setLoading]      = useState(true);
+  const [previewDoc,   setPreviewDoc]   = useState<ClientDocument | null>(null);
+  const [advisor,      setAdvisor]      = useState<{ name: string; email: string } | null>(null);
 
   useEffect(() => {
-    const supabase = createClient();
+    if (!activeClientId) return;
+    setLoading(true);
     Promise.all([
-      supabase.from("clients").select("*").maybeSingle(),
-      supabase.from("client_documents").select("*").order("created_at", { ascending: false }).limit(3),
-      supabase.from("client_documents").select("id").eq("is_seen" as string, false),
-      supabase.from("client_documents").select("id").eq("folder" as string, "Client Uploads"),
+      fetch("/api/portal/client").then((r) => r.ok ? r.json() : null) as Promise<Client | null>,
+      fetch("/api/portal/documents").then((r) => r.ok ? r.json() : { folders: [], documents: [] }) as Promise<{ folders: Array<{ id: string; name: string; parent_id: string | null }>; documents: ClientDocument[] }>,
       fetch("/api/portal/advisor").then((r) => r.ok ? r.json() : null) as Promise<{ name: string; email: string } | null>,
-    ]).then(([clientRes, docsRes, newRes, uploadsRes, advisorRes]) => {
-      if (clientRes.data) setClient(clientRes.data as unknown as Client);
-      setRecentDocs((docsRes.data ?? []) as unknown as ClientDocument[]);
-      setNewDocCount(newRes.data?.length ?? 0);
-      setUploadCount(uploadsRes.data?.length ?? 0);
+    ]).then(([clientRes, docsRes, advisorRes]) => {
+      if (clientRes) setClient(clientRes);
+      const docs = docsRes.documents ?? [];
+      const collectionFolder = (docsRes.folders ?? []).find((f) => f.name === "Collection Files" && !f.parent_id);
+      setRecentDocs(docs.slice(0, 3));
+      setNewDocCount(docs.filter((d) => !d.is_seen).length);
+      setUploadCount(collectionFolder ? docs.filter((d) => d.folder_id === collectionFolder.id).length : 0);
       if (advisorRes) setAdvisor(advisorRes);
       setLoading(false);
     });
-  }, []);
+  }, [activeClientId]);
 
   function openDoc(doc: ClientDocument) { setPreviewDoc(doc); }
 

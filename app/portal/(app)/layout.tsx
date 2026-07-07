@@ -4,6 +4,7 @@ import { useState } from "react";
 import Sidebar from "@/components/portal/sidebar";
 import { ToastProvider } from "@/components/portal/toast";
 import { SessionGuard } from "@/components/portal/session-guard";
+import { PortalProvider } from "@/components/portal/portal-context";
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -11,6 +12,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   return (
     <ToastProvider>
     <SessionGuard>
+    <PortalProvider>
       <div className="flex h-screen overflow-hidden">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
@@ -31,13 +33,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               </svg>
             </button>
             <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-md" style={{ background: "#d61b17" }}>
-                <svg className="h-3 w-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
-                </svg>
-              </div>
+              <img src="/logo.png" alt="Sparing" className="h-6 w-6 shrink-0" />
               <span className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>Sparing</span>
             </div>
           </header>
@@ -47,6 +43,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           </main>
         </div>
       </div>
+    </PortalProvider>
     </SessionGuard>
     </ToastProvider>
   );

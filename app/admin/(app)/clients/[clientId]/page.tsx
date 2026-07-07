@@ -10,6 +10,37 @@ import { useAdminUser, canWrite } from "@/components/admin/user-context";
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const isToday = d.toDateString() === today.toDateString();
+  if (isToday) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " · " +
+    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+function MessageTicks({ read, pending }: { read: boolean; pending: boolean }) {
+  if (pending) {
+    return (
+      <svg className="h-3 w-3 shrink-0" style={{ color: "#d1d5db" }} fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="8" cy="8" r="5.5" />
+        <path d="M8 5.5v2.5l1.75 1.75" />
+      </svg>
+    );
+  }
+  if (read) {
+    return (
+      <svg className="h-3.5 w-3.5 shrink-0" style={{ color: "#3b82f6" }} fill="none" viewBox="0 0 20 12" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 6l4 4 6.5-8" />
+        <path d="M6.5 6l4 4 6.5-8" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0" style={{ color: "#9ca3af" }} fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 6l4 4 6-8" />
+    </svg>
+  );
+}
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 }
@@ -21,7 +52,7 @@ function formatBytes(bytes: number | null) {
 
 const DOC_TYPES     = ["Contract", "Invoice", "Report", "Onboarding", "Other"];
 const EXPIRY_OPTIONS = [{ label: "3 days", value: 3 }, { label: "7 days", value: 7 }, { label: "14 days", value: 14 }, { label: "30 days", value: 30 }];
-const MAX_FILE_OPTIONS = [1, 5, 10, 20];
+const MAX_FILE_OPTIONS = [1, 5, 10, 20, 50, 100];
 
 async function openAdminDoc(doc: ClientDocument) {
   if (doc.storage_path === "__contract__") { window.open(`/admin/contract-preview`, "_blank"); return; }
@@ -48,6 +79,7 @@ function CopyButton({ value, label = "Copy link" }: { value: string; label?: str
 }
 
 interface UploadItem { file: File; name: string; }
+interface AccessEntry { id: string; role: string; created_at: string; contacts: { id: string; full_name: string; email: string } | null; }
 
 export default function AdminClientDetailPage() {
   const { clientId } = useParams<{ clientId: string }>();
@@ -79,16 +111,22 @@ export default function AdminClientDetailPage() {
   const [requestError,    setRequestError]    = useState("");
 
   // Share modal
-  const [shareDoc,     setShareDoc]     = useState<ClientDocument | null>(null);
-  const [shareExpiry,  setShareExpiry]  = useState(7);
-  const [shareLoading, setShareLoading] = useState(false);
-  const [shareLink,    setShareLink]    = useState("");
-  const [shareError,   setShareError]   = useState("");
+  const [shareDoc,      setShareDoc]      = useState<ClientDocument | null>(null);
+  const [shareExpiry,   setShareExpiry]   = useState(7);
+  const [shareLoading,  setShareLoading]  = useState(false);
+  const [shareLink,     setShareLink]     = useState("");
+  const [shareError,    setShareError]    = useState("");
+  const [shareMode,     setShareMode]     = useState<"internal" | "external">("internal");
+  const [sharePassword, setSharePassword] = useState("");
 
-  // Notes
-  const [notes,      setNotes]      = useState("");
-  const [notesSaved, setNotesSaved] = useState(false);
-  const [notesSaving, setNotesSaving] = useState(false);
+  // Notes (threaded)
+  type Note = { id: string; author_email: string; body: string; created_at: string; updated_at: string };
+  const [notesList,      setNotesList]      = useState<Note[]>([]);
+  const [newNoteBody,    setNewNoteBody]    = useState("");
+  const [noteSaving,     setNoteSaving]     = useState(false);
+  const [editingNoteId,  setEditingNoteId]  = useState<string | null>(null);
+  const [editNoteBody,   setEditNoteBody]   = useState("");
+  const [notesNewest,    setNotesNewest]    = useState(true);
 
   // Advisor
   const [advisors,        setAdvisors]        = useState<Array<{ id: string; name: string; email: string; title: string }>>([]);
@@ -96,13 +134,50 @@ export default function AdminClientDetailPage() {
   const [advisorSaving,   setAdvisorSaving]   = useState(false);
 
   // Add folder
-  const [addingFolder, setAddingFolder] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [folderError,  setFolderError]  = useState("");
+  const [addingFolder,      setAddingFolder]      = useState(false);
+  const [addingSubfolderId, setAddingSubfolderId] = useState<string | null>(null);
+  const [newFolderName,     setNewFolderName]     = useState("");
+  const [folderError,       setFolderError]       = useState("");
+  const [openFolders,       setOpenFolders]       = useState<Set<string>>(new Set());
 
-  // Delete
+  function toggleFolder(id: string) {
+    setOpenFolders((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  // Repair setup
+  const [repairing,     setRepairing]     = useState(false);
+  const [repairDone,    setRepairDone]    = useState(false);
+  const [repairError,   setRepairError]   = useState("");
+
+  async function handleRepair() {
+    setRepairing(true); setRepairError(""); setRepairDone(false);
+    const res = await fetch(`/api/admin/clients/${clientId}/repair`, { method: "POST" });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    setRepairing(false);
+    if (data.ok) {
+      setRepairDone(true);
+      // Reload folders + documents
+      fetch(`/api/admin/clients/${clientId}`)
+        .then((r) => r.json())
+        .then(({ folders: f, documents: d }: { client: Client; folders: ClientFolder[]; documents: ClientDocument[] }) => {
+          setFolders(f ?? []); setDocuments(d ?? []);
+        });
+    } else {
+      setRepairError(data.error ?? "Repair failed.");
+    }
+  }
+
+  // Delete client
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting,      setDeleting]      = useState(false);
+
+  // Delete folder modal
+  const [deleteFolderId,      setDeleteFolderId]      = useState<string | null>(null);
+  const [deletingFolder,      setDeletingFolder]      = useState(false);
 
   // Messages
   const [messages,    setMessages]    = useState<Array<{ id: string; sender: string; body: string; is_read: boolean; created_at: string }>>([]);
@@ -113,12 +188,18 @@ export default function AdminClientDetailPage() {
   // Payments
   const [paymentRecords, setPaymentRecords] = useState<Array<{ period_key: string; amount: number; status: string; paid_at: string | null }>>([]);
 
+  // Portal access
+  const [accessList,   setAccessList]   = useState<AccessEntry[]>([]);
+  const [grantEmail,   setGrantEmail]   = useState("");
+  const [grantRole,    setGrantRole]    = useState<"owner" | "member">("member");
+  const [grantLoading, setGrantLoading] = useState(false);
+  const [grantError,   setGrantError]   = useState("");
+
   useEffect(() => {
     fetch(`/api/admin/clients/${clientId}`)
       .then((r) => r.json())
       .then(({ client: c, folders: f, documents: d }: { client: Client; folders: ClientFolder[]; documents: ClientDocument[] }) => {
         setClient(c); setFolders(f ?? []); setDocuments(d ?? []);
-        setNotes(c?.internal_notes ?? "");
         setSelectedAdvisor((c as Client & { advisor_id?: string | null })?.advisor_id ?? null);
         setLoading(false);
       });
@@ -133,6 +214,12 @@ export default function AdminClientDetailPage() {
       .then((d: Array<{ id: string; name: string; email: string; title: string; is_active: boolean }>) => {
         if (Array.isArray(d)) setAdvisors(d.filter((a) => a.is_active));
       });
+    fetch(`/api/admin/clients/${clientId}/access`)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setAccessList(d); });
+    fetch(`/api/admin/clients/${clientId}/notes`)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setNotesList(d); });
   }, [clientId]);
 
   useEffect(() => {
@@ -149,7 +236,7 @@ export default function AdminClientDetailPage() {
       const form = new FormData();
       form.append("file", file);
       form.append("clientId", clientId);
-      form.append("folder", uploadFolder);
+      form.append("folder_id", uploadFolder);
       form.append("name", name || file.name.replace(/\.[^.]+$/, ""));
       form.append("type", uploadType);
       const res = await fetch("/api/admin/upload", { method: "POST", body: form });
@@ -169,7 +256,7 @@ export default function AdminClientDetailPage() {
     const res = await fetch("/api/admin/upload-requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId, label: requestLabel, targetFolder: requestFolder, maxFiles: requestMaxFiles, expiryDays: requestExpiry }),
+      body: JSON.stringify({ clientId, label: requestLabel, targetFolderId: requestFolder, maxFiles: requestMaxFiles, expiryDays: requestExpiry }),
     });
     const data = await res.json() as { url?: string; error?: string };
     setRequestLoading(false);
@@ -183,7 +270,7 @@ export default function AdminClientDetailPage() {
     const res = await fetch("/api/admin/document-shares", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ documentId: shareDoc.id, clientId, expiryDays: shareExpiry }),
+      body: JSON.stringify({ documentId: shareDoc.id, clientId, expiryDays: shareExpiry, mode: shareMode, password: shareMode === "external" ? sharePassword : undefined }),
     });
     const data = await res.json() as { url?: string; error?: string };
     setShareLoading(false);
@@ -191,29 +278,80 @@ export default function AdminClientDetailPage() {
     setShareLink(data.url ?? "");
   }
 
-  async function handleSaveNotes() {
-    setNotesSaving(true);
-    const res = await fetch(`/api/admin/clients/${clientId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ internal_notes: notes }),
+  async function handleAddNote() {
+    if (!newNoteBody.trim()) return;
+    setNoteSaving(true);
+    const res = await fetch(`/api/admin/clients/${clientId}/notes`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: newNoteBody.trim() }),
     });
-    setNotesSaving(false);
-    if (res.ok) { setNotesSaved(true); setTimeout(() => setNotesSaved(false), 2500); }
+    setNoteSaving(false);
+    if (res.ok) {
+      const note = await res.json() as Note;
+      setNotesList((prev) => [note, ...prev]);
+      setNewNoteBody("");
+    }
   }
 
-  async function handleAddFolder() {
+  async function handleEditNote(id: string) {
+    if (!editNoteBody.trim()) return;
+    const res = await fetch(`/api/admin/clients/${clientId}/notes`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, body: editNoteBody.trim() }),
+    });
+    if (res.ok) {
+      const updated = await res.json() as Note;
+      setNotesList((prev) => prev.map((n) => n.id === id ? updated : n));
+      setEditingNoteId(null);
+    }
+  }
+
+  async function handleDeleteNote(id: string) {
+    const res = await fetch(`/api/admin/clients/${clientId}/notes`, {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) setNotesList((prev) => prev.filter((n) => n.id !== id));
+  }
+
+  async function handleConfirmDeleteFolder() {
+    if (!deleteFolderId) return;
+    setDeletingFolder(true);
+    const res = await fetch(`/api/admin/clients/${clientId}/folders`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: deleteFolderId }),
+    });
+    setDeletingFolder(false);
+    if (res.ok) {
+      const removedIds = new Set([deleteFolderId]);
+      let found = true;
+      while (found) {
+        found = false;
+        for (const f of folders) {
+          if (f.parent_id && removedIds.has(f.parent_id) && !removedIds.has(f.id)) {
+            removedIds.add(f.id); found = true;
+          }
+        }
+      }
+      setFolders((prev) => prev.filter((f) => !removedIds.has(f.id)));
+      setDocuments((prev) => prev.filter((d) => !d.folder_id || !removedIds.has(d.folder_id)));
+    }
+    setDeleteFolderId(null);
+  }
+
+  async function handleAddFolder(parentId: string | null = null) {
     if (!newFolderName.trim()) return;
     setFolderError("");
     const res = await fetch(`/api/admin/clients/${clientId}/folders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newFolderName.trim() }),
+      body: JSON.stringify({ name: newFolderName.trim(), parent_id: parentId }),
     });
     const data = await res.json() as ClientFolder & { error?: string };
     if (!res.ok) { setFolderError(data.error ?? "Failed to create folder."); return; }
-    setFolders((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
-    setNewFolderName(""); setAddingFolder(false);
+    setFolders((prev) => [...prev, data]);
+    setNewFolderName(""); setAddingFolder(false); setAddingSubfolderId(null);
   }
 
   async function handleDelete() {
@@ -223,18 +361,123 @@ export default function AdminClientDetailPage() {
     else setDeleting(false);
   }
 
-  function openUploadModal(folderName: string) {
-    setUploadFolder(folderName); setUploadItems([]); setUploadError(""); setUploadType("Report");
+  function openUploadModal(folderId: string) {
+    setUploadFolder(folderId); setUploadItems([]); setUploadError(""); setUploadType("Report");
   }
-  function openRequestModal(folderName: string) {
-    setRequestFolder(folderName); setRequestLabel(""); setRequestLink(""); setRequestError("");
+  function openRequestModal(folderId: string) {
+    setRequestFolder(folderId); setRequestLabel(""); setRequestLink(""); setRequestError("");
     setRequestMaxFiles(10); setRequestExpiry(7);
   }
   function openShareModal(doc: ClientDocument) {
     setShareDoc(doc); setShareLink(""); setShareError(""); setShareExpiry(7);
+    setShareMode("internal"); setSharePassword("");
   }
 
-  const docsInFolder = (name: string) => documents.filter((d) => d.folder === name);
+  const docsInFolder = (folderId: string) => documents.filter((d) => d.folder_id === folderId);
+  const subfolders   = (parentId: string | null) => folders.filter((f) => f.parent_id === parentId);
+  const folderName   = (folderId: string) => folders.find((f) => f.id === folderId)?.name ?? "Folder";
+
+  function renderFolderNode(folder: ClientFolder, depth: number): React.ReactNode {
+    const docs = docsInFolder(folder.id);
+    const children = subfolders(folder.id);
+    const isOpen = openFolders.has(folder.id);
+    return (
+      <div key={folder.id} className="overflow-hidden rounded-xl border bg-white" style={{ borderColor: "#ebecef", marginLeft: depth > 0 ? 20 : 0 }}>
+        <div className="flex items-center justify-between px-5 py-3.5">
+          <button onClick={() => toggleFolder(folder.id)} className="flex flex-1 items-center gap-3 text-left">
+            <svg className="h-4 w-4 shrink-0" style={{ color: "#1d4ed8" }} fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+            </svg>
+            <span className="text-sm font-semibold" style={{ color: "#171717" }}>{folder.name}</span>
+            <span className="text-xs" style={{ color: "#9ca3af" }}>
+              {docs.length === 0 && children.length === 0 ? "Empty" : `${docs.length} file${docs.length !== 1 ? "s" : ""}${children.length > 0 ? ` · ${children.length} subfolder${children.length !== 1 ? "s" : ""}` : ""}`}
+            </span>
+            <svg className="ml-1 h-3.5 w-3.5 shrink-0 transition-transform duration-200" style={{ color: "#9ca3af", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {write && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => { setAddingSubfolderId(folder.id); setNewFolderName(""); setFolderError(""); }}
+                className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[0.65rem] font-medium transition hover:border-[#1d4ed8] hover:text-[#1d4ed8]"
+                style={{ borderColor: "#ebecef", color: "#6b7280" }} title="Add subfolder">
+                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+              </button>
+              <button onClick={() => openRequestModal(folder.id)}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition hover:border-[#1d4ed8] hover:text-[#1d4ed8]"
+                style={{ borderColor: "#ebecef", color: "#6b7280" }}>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
+                Request
+              </button>
+              <button onClick={() => openUploadModal(folder.id)}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition hover:border-[#1d4ed8] hover:text-[#1d4ed8]"
+                style={{ borderColor: "#ebecef", color: "#6b7280" }}>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                Upload
+              </button>
+              <button onClick={() => setDeleteFolderId(folder.id)}
+                className="flex items-center justify-center rounded-lg border px-2 py-1.5 text-xs transition hover:border-red-300 hover:text-red-600"
+                style={{ borderColor: "#ebecef", color: "#9ca3af" }} title="Delete folder">
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
+        {/* Inline subfolder creation */}
+        {isOpen && addingSubfolderId === folder.id && (
+          <div className="border-t px-5 py-3" style={{ borderColor: "#f3f4f6" }}>
+            <div className="flex items-center gap-2">
+              <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void handleAddFolder(folder.id); if (e.key === "Escape") setAddingSubfolderId(null); }}
+                placeholder="Subfolder name…" autoFocus
+                className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none transition" style={inputBorder} onFocus={inputFocus} onBlur={inputBlur} />
+              <button onClick={() => void handleAddFolder(folder.id)} disabled={!newFolderName.trim()}
+                className="rounded-lg px-4 py-2 text-xs font-semibold text-white transition hover:opacity-85 disabled:opacity-40" style={{ background: "#1d4ed8" }}>Create</button>
+              <button onClick={() => setAddingSubfolderId(null)} className="text-xs" style={{ color: "#9ca3af" }}>Cancel</button>
+            </div>
+            {folderError && <p className="mt-1 text-xs" style={{ color: "#dc2626" }}>{folderError}</p>}
+          </div>
+        )}
+        {isOpen && docs.length > 0 && (
+          <div className="border-t" style={{ borderColor: "#f3f4f6" }}>
+            {docs.map((doc) => (
+              <div key={doc.id} className="flex items-center gap-3 border-b px-5 py-3 last:border-0" style={{ borderColor: "#f3f4f6" }}>
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: "rgba(29,78,216,0.07)" }}>
+                  <span className="text-[0.5rem] font-bold uppercase" style={{ color: "#1d4ed8" }}>PDF</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <button onClick={() => void openAdminDoc(doc)} className="text-xs font-semibold transition-colors hover:underline" style={{ color: "#171717" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#1d4ed8")} onMouseLeave={(e) => (e.currentTarget.style.color = "#171717")}>{doc.name}</button>
+                  <div className="text-xs" style={{ color: "#9ca3af" }}>{formatDate(doc.created_at)}{doc.size_bytes ? ` · ${formatBytes(doc.size_bytes)}` : ""}</div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {!doc.is_seen && <span className="rounded-full px-2 py-0.5 text-[0.55rem] font-bold uppercase text-white" style={{ background: "#1d4ed8" }}>New</span>}
+                  {write && (
+                    <button onClick={() => openShareModal(doc)} className="flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[0.65rem] font-medium transition hover:border-[#1d4ed8] hover:text-[#1d4ed8]"
+                      style={{ borderColor: "#ebecef", color: "#6b7280" }}>
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
+                      Share
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {isOpen && docs.length === 0 && children.length === 0 && (
+          <div className="border-t px-5 py-4 text-xs" style={{ borderColor: "#f3f4f6", color: "#9ca3af" }}>No files in this folder yet.</div>
+        )}
+        {isOpen && children.length > 0 && (
+          <div className="border-t px-3 py-3 space-y-2" style={{ borderColor: "#f3f4f6" }}>
+            {children.map((child) => renderFolderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   async function handleSendMessage() {
     const trimmed = msgBody.trim();
@@ -270,6 +513,30 @@ export default function AdminClientDetailPage() {
         return [...prev, saved];
       });
     }
+  }
+
+  async function handleGrantAccess() {
+    if (!grantEmail.trim()) return;
+    setGrantLoading(true); setGrantError("");
+    const res = await fetch(`/api/admin/clients/${clientId}/access`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: grantEmail.trim(), role: grantRole }),
+    });
+    const data = await res.json() as AccessEntry & { error?: string };
+    setGrantLoading(false);
+    if (!res.ok) { setGrantError(data.error ?? "Failed to grant access."); return; }
+    setAccessList((prev) => [...prev, data]);
+    setGrantEmail("");
+  }
+
+  async function handleRevokeAccess(accessId: string) {
+    const res = await fetch(`/api/admin/clients/${clientId}/access`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accessId }),
+    });
+    if (res.ok) setAccessList((prev) => prev.filter((a) => a.id !== accessId));
   }
 
   async function handleAdvisorChange(advisorId: string | null) {
@@ -356,6 +623,71 @@ export default function AdminClientDetailPage() {
         )}
       </div>
 
+      {/* ── Messages ── */}
+      <div className="mb-10 rounded-2xl border bg-white overflow-hidden" style={{ borderColor: "#ebecef" }}>
+        <div className="flex items-center justify-between border-b px-6 py-4" style={{ borderColor: "#f3f4f6" }}>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: "#171717" }}>Messages</h2>
+            <p className="text-xs" style={{ color: "#9ca3af" }}>Thread with {client.full_name}</p>
+          </div>
+          {messages.filter((m) => m.sender === "client" && !m.is_read).length > 0 && (
+            <span className="rounded-full px-2 py-0.5 text-[0.6rem] font-bold text-white" style={{ background: "#1d4ed8" }}>
+              {messages.filter((m) => m.sender === "client" && !m.is_read).length} new
+            </span>
+          )}
+        </div>
+        <div className="flex flex-col" style={{ height: 320 }}>
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+            {messages.length === 0 ? (
+              <p className="py-8 text-center text-sm" style={{ color: "#9ca3af" }}>No messages yet.</p>
+            ) : messages.map((msg) => {
+              const isAdvisor = msg.sender === "advisor";
+              const isPending = !("client_id" in msg);
+              return (
+                <div key={msg.id} className={`flex ${isAdvisor ? "justify-end" : "justify-start"}`}>
+                  <div className={`flex max-w-[70%] flex-col gap-0.5 ${isAdvisor ? "items-end" : "items-start"}`}>
+                    <div className="rounded-2xl px-4 py-2.5 text-sm leading-relaxed"
+                      style={isAdvisor
+                        ? { background: "#1d4ed8", color: "#fff", borderBottomRightRadius: 6 }
+                        : { background: "#f3f4f6", color: "#171717", borderBottomLeftRadius: 6 }}>
+                      {msg.body}
+                    </div>
+                    <div className="mx-1 flex items-center gap-1">
+                      <span className="text-[0.6rem]" style={{ color: "#9ca3af" }}>{formatTime(msg.created_at)}</span>
+                      {isAdvisor && <MessageTicks read={msg.is_read} pending={isPending} />}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={msgBottomRef} />
+          </div>
+          {write && <div className="border-t px-4 py-3 flex gap-2" style={{ borderColor: "#f3f4f6" }}>
+            <input
+              type="text"
+              value={msgBody}
+              onChange={(e) => setMsgBody(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleSendMessage(); }}
+              placeholder="Reply as advisor…"
+              className="flex-1 rounded-xl border px-4 py-2.5 text-sm outline-none transition"
+              style={{ borderColor: "#ebecef", color: "#171717" }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "#1d4ed8")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "#ebecef")}
+            />
+            <button
+              onClick={() => void handleSendMessage()}
+              disabled={!msgBody.trim() || msgSending}
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-white transition hover:opacity-85 disabled:opacity-40"
+              style={{ background: "#1d4ed8" }}
+            >
+              <svg className="h-4 w-4 translate-x-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.269 20.876L5.999 12zm0 0h7.5" />
+              </svg>
+            </button>
+          </div>}
+        </div>
+      </div>
+
       {/* Folders */}
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold" style={{ color: "#171717" }}>Folders</h2>
@@ -393,7 +725,7 @@ export default function AdminClientDetailPage() {
                 onFocus={inputFocus}
                 onBlur={inputBlur}
               />
-              <button onClick={handleAddFolder} disabled={!newFolderName.trim()}
+              <button onClick={() => void handleAddFolder(null)} disabled={!newFolderName.trim()}
                 className="rounded-lg px-4 py-2 text-xs font-semibold text-white transition hover:opacity-85 disabled:opacity-40" style={{ background: "#1d4ed8" }}>
                 Create
               </button>
@@ -405,182 +737,107 @@ export default function AdminClientDetailPage() {
       </AnimatePresence>
 
       <div className="mb-10 space-y-2">
-        {folders.map((folder) => {
-          const docs = docsInFolder(folder.name);
-          return (
-            <div key={folder.id} className="overflow-hidden rounded-xl border bg-white" style={{ borderColor: "#ebecef" }}>
-              <div className="flex items-center justify-between px-5 py-3.5">
-                <div className="flex items-center gap-3">
-                  <svg className="h-4 w-4" style={{ color: "#1d4ed8" }} fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                  </svg>
-                  <span className="text-sm font-semibold" style={{ color: "#171717" }}>{folder.name}</span>
-                  <span className="text-xs" style={{ color: "#9ca3af" }}>
-                    {docs.length === 0 ? "Empty" : `${docs.length} file${docs.length !== 1 ? "s" : ""}`}
-                  </span>
-                </div>
-                {write && (
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => openRequestModal(folder.name)}
-                      className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition hover:border-[#1d4ed8] hover:text-[#1d4ed8]"
-                      style={{ borderColor: "#ebecef", color: "#6b7280" }}>
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
-                      Request
-                    </button>
-                    <button onClick={() => openUploadModal(folder.name)}
-                      className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition hover:border-[#1d4ed8] hover:text-[#1d4ed8]"
-                      style={{ borderColor: "#ebecef", color: "#6b7280" }}>
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                      Upload
-                    </button>
-                  </div>
-                )}
-              </div>
-              {docs.length > 0 && (
-                <div className="border-t" style={{ borderColor: "#f3f4f6" }}>
-                  {docs.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-3 border-b px-5 py-3 last:border-0" style={{ borderColor: "#f3f4f6" }}>
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: "rgba(29,78,216,0.07)" }}>
-                        <span className="text-[0.5rem] font-bold uppercase" style={{ color: "#1d4ed8" }}>PDF</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <button onClick={() => void openAdminDoc(doc)}
-                          className="text-xs font-semibold transition-colors hover:underline" style={{ color: "#171717" }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "#1d4ed8")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "#171717")}>
-                          {doc.name}
-                        </button>
-                        <div className="text-xs" style={{ color: "#9ca3af" }}>
-                          {formatDate(doc.created_at)}{doc.size_bytes ? ` · ${formatBytes(doc.size_bytes)}` : ""}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {!doc.is_seen && <span className="rounded-full px-2 py-0.5 text-[0.55rem] font-bold uppercase text-white" style={{ background: "#1d4ed8" }}>New</span>}
-                        {write && (
-                          <button onClick={() => openShareModal(doc)}
-                            className="flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[0.65rem] font-medium transition hover:border-[#1d4ed8] hover:text-[#1d4ed8]"
-                            style={{ borderColor: "#ebecef", color: "#6b7280" }}>
-                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
-                            Share
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {subfolders(null).map((folder) => renderFolderNode(folder, 0))}
       </div>
 
       {/* Internal notes */}
-      <div className="mb-10 rounded-2xl border bg-white p-6" style={{ borderColor: "#ebecef", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-        <h2 className="mb-1 text-sm font-semibold" style={{ color: "#171717" }}>Internal notes</h2>
-        <p className="mb-4 text-xs" style={{ color: "#9ca3af" }}>Private notes for the team. Not visible to the client.</p>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={4}
-          placeholder={`Notes on ${client.full_name}…`}
-          className="w-full resize-none rounded-xl border px-4 py-3 text-sm outline-none transition"
-          style={inputBorder}
-          onFocus={(e) => (e.currentTarget.style.borderColor = "#1d4ed8")}
-          onBlur={(e) => (e.currentTarget.style.borderColor = "#d1d5db")}
-        />
-        <div className="mt-3 flex items-center gap-3">
-          {write && (
-            <button
-              onClick={handleSaveNotes}
-              disabled={notesSaving}
-              className="rounded-full px-5 py-2 text-xs font-semibold text-white transition hover:opacity-85 disabled:opacity-50"
-              style={{ background: "#1d4ed8" }}>
-              {notesSaving ? "Saving…" : "Save notes"}
-            </button>
-          )}
-          {notesSaved && (
-            <motion.span initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: "#059669" }}>
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              Saved
-            </motion.span>
-          )}
-        </div>
-      </div>
-
-      {/* Danger zone — super_admin only */}
-      {role === "super_admin" && <div className="rounded-2xl border p-6" style={{ borderColor: "#fee2e2", background: "#fff5f5" }}>
-        <h2 className="mb-1 text-sm font-semibold" style={{ color: "#991b1b" }}>Danger zone</h2>
-        <p className="mb-4 text-xs" style={{ color: "#b91c1c" }}>Deleting this account permanently removes the client, all their documents, and their portal access. This cannot be undone.</p>
-        {deleteConfirm ? (
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium" style={{ color: "#991b1b" }}>Are you sure?</span>
-            <button onClick={handleDelete} disabled={deleting} className="rounded-lg px-4 py-2 text-xs font-semibold text-white transition hover:opacity-85 disabled:opacity-50" style={{ background: "#dc2626" }}>
-              {deleting ? "Deleting…" : "Yes, delete"}
-            </button>
-            <button onClick={() => setDeleteConfirm(false)} className="text-xs" style={{ color: "#9ca3af" }}>Cancel</button>
-          </div>
-        ) : (
-          <button onClick={() => setDeleteConfirm(true)} className="rounded-lg border px-4 py-2 text-xs font-semibold transition hover:bg-[#fee2e2]" style={{ borderColor: "#fca5a5", color: "#dc2626" }}>
-            Delete account
-          </button>
-        )}
-      </div>}
-
-      {/* ── Messages ── */}
-      <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: "#ebecef" }}>
+      <div className="mb-10 rounded-2xl border bg-white overflow-hidden" style={{ borderColor: "#ebecef", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
         <div className="flex items-center justify-between border-b px-6 py-4" style={{ borderColor: "#f3f4f6" }}>
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: "#171717" }}>Messages</h2>
-            <p className="text-xs" style={{ color: "#9ca3af" }}>Thread with {client.full_name}</p>
+            <h2 className="text-sm font-semibold" style={{ color: "#171717" }}>Internal notes</h2>
+            <p className="text-xs" style={{ color: "#9ca3af" }}>Private team notes. Not visible to the client.</p>
           </div>
-          {messages.filter((m) => m.sender === "client" && !m.is_read).length > 0 && (
-            <span className="rounded-full px-2 py-0.5 text-[0.6rem] font-bold text-white" style={{ background: "#1d4ed8" }}>
-              {messages.filter((m) => m.sender === "client" && !m.is_read).length} new
-            </span>
-          )}
+          <button onClick={() => setNotesNewest((n) => !n)}
+            className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[0.65rem] font-medium transition hover:border-[#d8dbe1]"
+            style={{ borderColor: "#ebecef", color: "#6b7280" }}>
+            <svg className="h-3 w-3" style={{ transform: notesNewest ? undefined : "rotate(180deg)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+            {notesNewest ? "Newest" : "Oldest"}
+          </button>
         </div>
-        <div className="flex flex-col" style={{ height: 320 }}>
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-            {messages.length === 0 ? (
-              <p className="py-8 text-center text-sm" style={{ color: "#9ca3af" }}>No messages yet.</p>
-            ) : messages.map((msg) => {
-              const isAdvisor = msg.sender === "advisor";
-              return (
-                <div key={msg.id} className={`flex ${isAdvisor ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed`}
-                    style={isAdvisor
-                      ? { background: "#1d4ed8", color: "#fff", borderBottomRightRadius: 6 }
-                      : { background: "#f3f4f6", color: "#171717", borderBottomLeftRadius: 6 }}>
-                    {msg.body}
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={msgBottomRef} />
+
+        {/* Add note */}
+        {write && (
+          <div className="border-b px-6 py-4" style={{ borderColor: "#f3f4f6" }}>
+            <div className="flex gap-2">
+              <textarea
+                value={newNoteBody}
+                onChange={(e) => setNewNoteBody(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleAddNote(); } }}
+                rows={2}
+                placeholder="Add a note… (Enter to save, Shift+Enter for new line)"
+                className="flex-1 resize-none rounded-xl border px-4 py-3 text-sm outline-none transition"
+                style={inputBorder}
+                onFocus={inputFocus}
+                onBlur={inputBlur}
+              />
+              <button onClick={() => void handleAddNote()} disabled={!newNoteBody.trim() || noteSaving}
+                className="self-end rounded-xl px-4 py-3 text-xs font-semibold text-white transition hover:opacity-85 disabled:opacity-40"
+                style={{ background: "#1d4ed8" }}>
+                {noteSaving ? "…" : "Add"}
+              </button>
+            </div>
           </div>
-          {write && <div className="border-t px-4 py-3 flex gap-2" style={{ borderColor: "#f3f4f6" }}>
-            <input
-              type="text"
-              value={msgBody}
-              onChange={(e) => setMsgBody(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void handleSendMessage(); }}
-              placeholder="Reply as advisor…"
-              className="flex-1 rounded-xl border px-4 py-2.5 text-sm outline-none transition"
-              style={{ borderColor: "#ebecef", color: "#171717" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "#1d4ed8")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "#ebecef")}
-            />
-            <button
-              onClick={() => void handleSendMessage()}
-              disabled={!msgBody.trim() || msgSending}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-white transition hover:opacity-85 disabled:opacity-40"
-              style={{ background: "#1d4ed8" }}
-            >
-              <svg className="h-4 w-4 translate-x-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.269 20.876L5.999 12zm0 0h7.5" />
-              </svg>
-            </button>
-          </div>}
+        )}
+
+        {/* Notes feed */}
+        <div className="max-h-[400px] overflow-y-auto divide-y" style={{ borderColor: "#f9f9fb" }}>
+          {notesList.length === 0 ? (
+            <p className="px-6 py-8 text-center text-sm" style={{ color: "#9ca3af" }}>No notes yet.</p>
+          ) : [...notesList].sort((a, b) => notesNewest
+            ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            : new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          ).map((note) => {
+            const initials = note.author_email.split("@")[0].split(".").map((s) => s[0]?.toUpperCase()).join("").slice(0, 2);
+            const isEditing = editingNoteId === note.id;
+            const edited = note.updated_at !== note.created_at;
+            return (
+              <div key={note.id} className="px-6 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[0.55rem] font-bold text-white" style={{ background: "#1d4ed8" }}>
+                    {initials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold" style={{ color: "#171717" }}>{note.author_email.split("@")[0]}</span>
+                      <span className="text-[0.6rem]" style={{ color: "#9ca3af" }}>{formatTime(note.created_at)}{edited ? " · edited" : ""}</span>
+                    </div>
+                    {isEditing ? (
+                      <div className="mt-2">
+                        <textarea value={editNoteBody} onChange={(e) => setEditNoteBody(e.target.value)} rows={2}
+                          className="w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none transition" style={inputBorder}
+                          onFocus={inputFocus} onBlur={inputBlur} autoFocus />
+                        <div className="mt-2 flex gap-2">
+                          <button onClick={() => void handleEditNote(note.id)} disabled={!editNoteBody.trim()}
+                            className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-85 disabled:opacity-40" style={{ background: "#1d4ed8" }}>Save</button>
+                          <button onClick={() => setEditingNoteId(null)} className="text-xs" style={{ color: "#9ca3af" }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "#374151" }}>{note.body}</p>
+                    )}
+                  </div>
+                  {write && !isEditing && (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button onClick={() => { setEditingNoteId(note.id); setEditNoteBody(note.body); }}
+                        className="rounded p-1 transition-colors hover:bg-[#f3f4f6]" style={{ color: "#9ca3af" }} title="Edit">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                        </svg>
+                      </button>
+                      <button onClick={() => void handleDeleteNote(note.id)}
+                        className="rounded p-1 transition-colors hover:bg-red-50" style={{ color: "#9ca3af" }} title="Delete">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -664,6 +921,113 @@ export default function AdminClientDetailPage() {
         ) : null;
       })()}
 
+      {/* ── Portal Access ── */}
+      <div className="mt-10 rounded-2xl border bg-white overflow-hidden" style={{ borderColor: "#ebecef" }}>
+        <div className="border-b px-6 py-4" style={{ borderColor: "#f3f4f6" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "#171717" }}>Portal Access</h2>
+          <p className="text-xs" style={{ color: "#9ca3af" }}>People who can log into the portal and see this company&apos;s data.</p>
+        </div>
+        <div className="divide-y" style={{ borderColor: "#f9f9fb" }}>
+          {accessList.length === 0 ? (
+            <p className="px-6 py-4 text-sm" style={{ color: "#9ca3af" }}>No portal access granted yet.</p>
+          ) : accessList.map((entry) => (
+            <div key={entry.id} className="flex items-center justify-between px-6 py-3">
+              <div>
+                <p className="text-sm font-medium" style={{ color: "#171717" }}>{entry.contacts?.full_name ?? "—"}</p>
+                <p className="text-xs" style={{ color: "#6b7280" }}>{entry.contacts?.email ?? "—"} · <span className="capitalize">{entry.role}</span></p>
+              </div>
+              {write && (
+                <button
+                  onClick={() => void handleRevokeAccess(entry.id)}
+                  className="text-xs transition-colors hover:text-red-600"
+                  style={{ color: "#9ca3af" }}
+                >
+                  Revoke
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {write && (
+          <div className="border-t px-6 py-4" style={{ borderColor: "#f3f4f6" }}>
+            <p className="mb-3 text-[0.7rem] font-semibold uppercase tracking-[0.08em]" style={{ color: "#6b7280" }}>Grant access</p>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={grantEmail}
+                onChange={(e) => setGrantEmail(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void handleGrantAccess(); }}
+                placeholder="contact@email.com"
+                className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none transition"
+                style={{ borderColor: "#d1d5db", color: "#171717" }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "#1d4ed8")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "#d1d5db")}
+              />
+              <select
+                value={grantRole}
+                onChange={(e) => setGrantRole(e.target.value as "owner" | "member")}
+                className="rounded-lg border px-3 py-2 text-sm outline-none"
+                style={{ borderColor: "#d1d5db", color: "#171717" }}
+              >
+                <option value="member">Member</option>
+                <option value="owner">Owner</option>
+              </select>
+              <button
+                onClick={() => void handleGrantAccess()}
+                disabled={!grantEmail.trim() || grantLoading}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                style={{ background: "#1d4ed8" }}
+              >
+                {grantLoading ? "…" : "Grant"}
+              </button>
+            </div>
+            {grantError && <p className="mt-2 text-xs" style={{ color: "#dc2626" }}>{grantError}</p>}
+            <p className="mt-2 text-[0.65rem]" style={{ color: "#9ca3af" }}>The contact must have logged into the portal at least once before you can grant access.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Repair setup */}
+      {write && (
+        <div className="mt-10 rounded-2xl border p-6" style={{ borderColor: "#e5e7eb", background: "#f9fafb" }}>
+          <h2 className="mb-1 text-sm font-semibold" style={{ color: "#374151" }}>Repair client setup</h2>
+          <p className="mb-4 text-xs" style={{ color: "#6b7280" }}>
+            Re-runs the onboarding setup for this client: creates any missing folders, fixes the contract document location, and ensures portal access is configured. Safe to run multiple times.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => void handleRepair()}
+              disabled={repairing}
+              className="rounded-lg border px-4 py-2 text-xs font-semibold transition hover:border-[#6b7280] disabled:opacity-50"
+              style={{ borderColor: "#d1d5db", color: "#374151" }}
+            >
+              {repairing ? "Repairing…" : "Repair setup"}
+            </button>
+            {repairDone && <span className="text-xs font-medium" style={{ color: "#059669" }}>Done — folders and contract are up to date.</span>}
+            {repairError && <span className="text-xs" style={{ color: "#dc2626" }}>{repairError}</span>}
+          </div>
+        </div>
+      )}
+
+      {/* Danger zone — super_admin only */}
+      {role === "super_admin" && <div className="mt-4 rounded-2xl border p-6" style={{ borderColor: "#fee2e2", background: "#fff5f5" }}>
+        <h2 className="mb-1 text-sm font-semibold" style={{ color: "#991b1b" }}>Danger zone</h2>
+        <p className="mb-4 text-xs" style={{ color: "#b91c1c" }}>Deleting this account permanently removes the client, all their documents, and their portal access. This cannot be undone.</p>
+        {deleteConfirm ? (
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium" style={{ color: "#991b1b" }}>Are you sure?</span>
+            <button onClick={handleDelete} disabled={deleting} className="rounded-lg px-4 py-2 text-xs font-semibold text-white transition hover:opacity-85 disabled:opacity-50" style={{ background: "#dc2626" }}>
+              {deleting ? "Deleting…" : "Yes, delete"}
+            </button>
+            <button onClick={() => setDeleteConfirm(false)} className="text-xs" style={{ color: "#9ca3af" }}>Cancel</button>
+          </div>
+        ) : (
+          <button onClick={() => setDeleteConfirm(true)} className="rounded-lg border px-4 py-2 text-xs font-semibold transition hover:bg-[#fee2e2]" style={{ borderColor: "#fca5a5", color: "#dc2626" }}>
+            Delete account
+          </button>
+        )}
+      </div>}
+
       {/* ── Upload modal ── */}
       <AnimatePresence>
         {uploadFolder && (
@@ -673,7 +1037,7 @@ export default function AdminClientDetailPage() {
             onClick={(e) => { if (e.target === e.currentTarget) setUploadFolder(null); }}>
             <motion.div initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }}
               className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-              <h3 className="mb-1 text-base font-bold" style={{ color: "#171717" }}>Upload to {uploadFolder}</h3>
+              <h3 className="mb-1 text-base font-bold" style={{ color: "#171717" }}>Upload to {folderName(uploadFolder!)}</h3>
               <p className="mb-5 text-xs" style={{ color: "#9ca3af" }}>Files appear in {client.full_name}&apos;s portal immediately.</p>
 
               {/* Drop zone */}
@@ -768,7 +1132,7 @@ export default function AdminClientDetailPage() {
             onClick={(e) => { if (e.target === e.currentTarget) setRequestFolder(null); }}>
             <motion.div initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }}
               className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-              <h3 className="mb-1 text-base font-bold" style={{ color: "#171717" }}>Request files · {requestFolder}</h3>
+              <h3 className="mb-1 text-base font-bold" style={{ color: "#171717" }}>Request files · {folderName(requestFolder!)}</h3>
               <p className="mb-5 text-xs" style={{ color: "#9ca3af" }}>
                 Generate a secure upload link for {client.full_name}. They verify with their email before uploading.
               </p>
@@ -824,6 +1188,49 @@ export default function AdminClientDetailPage() {
         )}
       </AnimatePresence>
 
+      {/* ── Delete folder modal ── */}
+      <AnimatePresence>
+        {deleteFolderId && (() => {
+          const f = folders.find((x) => x.id === deleteFolderId);
+          const kids = folders.filter((x) => x.parent_id === deleteFolderId);
+          const docs = documents.filter((x) => x.folder_id === deleteFolderId);
+          return (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+              onClick={(e) => { if (e.target === e.currentTarget && !deletingFolder) setDeleteFolderId(null); }}>
+              <motion.div initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }}
+                className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ background: "rgba(239,68,68,0.08)" }}>
+                  <svg className="h-6 w-6" style={{ color: "#dc2626" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-bold" style={{ color: "#171717" }}>Delete &ldquo;{f?.name}&rdquo;?</h3>
+                <p className="mt-2 text-sm leading-relaxed" style={{ color: "#6b7280" }}>
+                  {kids.length > 0 || docs.length > 0
+                    ? `This folder contains ${docs.length} file${docs.length !== 1 ? "s" : ""} and ${kids.length} subfolder${kids.length !== 1 ? "s" : ""}. Everything inside will be permanently deleted.`
+                    : "This empty folder will be permanently deleted."}
+                </p>
+                <p className="mt-1 text-xs" style={{ color: "#9ca3af" }}>This action cannot be undone.</p>
+                <div className="mt-5 flex gap-2.5">
+                  <button onClick={() => void handleConfirmDeleteFolder()} disabled={deletingFolder}
+                    className="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                    style={{ background: "#dc2626" }}>
+                    {deletingFolder ? "Deleting…" : "Delete folder"}
+                  </button>
+                  <button onClick={() => setDeleteFolderId(null)} disabled={deletingFolder}
+                    className="flex-1 rounded-xl border py-2.5 text-sm font-semibold transition hover:bg-[#f8f8f9]"
+                    style={{ borderColor: "#ebecef", color: "#6b7280" }}>
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
       {/* ── Share document modal ── */}
       <AnimatePresence>
         {shareDoc && (
@@ -836,10 +1243,41 @@ export default function AdminClientDetailPage() {
               <h3 className="mb-1 text-base font-bold" style={{ color: "#171717" }}>Share document</h3>
               <p className="mb-1 text-sm font-medium" style={{ color: "#171717" }}>{shareDoc.name}</p>
               <p className="mb-5 text-xs" style={{ color: "#9ca3af" }}>
-                Recipient must enter {client.full_name}&apos;s email before downloading. The link reveals no file metadata.
+                Choose how the recipient will access this document.
               </p>
               {!shareLink ? (
                 <>
+                  {/* Mode toggle */}
+                  <div className="mb-4">
+                    <label className="mb-1 block text-[0.7rem] font-semibold uppercase tracking-[0.08em]" style={{ color: "#6b7280" }}>Share type</label>
+                    <div className="flex gap-2">
+                      {(["internal", "external"] as const).map((m) => (
+                        <button key={m} onClick={() => setShareMode(m)}
+                          className="flex-1 rounded-lg border py-2.5 text-xs font-semibold transition"
+                          style={{
+                            borderColor: shareMode === m ? "#1d4ed8" : "#d1d5db",
+                            background:  shareMode === m ? "rgba(29,78,216,0.06)" : "transparent",
+                            color:       shareMode === m ? "#1d4ed8" : "#6b7280",
+                          }}>
+                          {m === "internal" ? "Internal (login required)" : "External (password)"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Password for external */}
+                  {shareMode === "external" && (
+                    <div className="mb-4">
+                      <label className="mb-1 block text-[0.7rem] font-semibold uppercase tracking-[0.08em]" style={{ color: "#6b7280" }}>
+                        Access password <span className="normal-case font-normal text-[#9ca3af]">(optional)</span>
+                      </label>
+                      <input type="text" value={sharePassword} onChange={(e) => setSharePassword(e.target.value)}
+                        placeholder="Leave blank for no password"
+                        className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition" style={inputBorder}
+                        onFocus={inputFocus} onBlur={inputBlur} />
+                    </div>
+                  )}
+
                   <div className="mb-5">
                     <label className="mb-1 block text-[0.7rem] font-semibold uppercase tracking-[0.08em]" style={{ color: "#6b7280" }}>Expires in</label>
                     <select value={shareExpiry} onChange={(e) => setShareExpiry(Number(e.target.value))}
@@ -864,7 +1302,7 @@ export default function AdminClientDetailPage() {
                     <CopyButton value={shareLink} />
                   </div>
                   <p className="mb-4 text-xs" style={{ color: "#9ca3af" }}>
-                    Expires in {shareExpiry} days · email verification required · activity is logged
+                    Expires in {shareExpiry} days · {shareMode === "internal" ? "login required" : sharePassword ? "password protected" : "no password"} · activity is logged
                   </p>
                   <button onClick={() => setShareDoc(null)} className="w-full rounded-xl border py-2.5 text-sm font-medium" style={{ borderColor: "#ebecef", color: "#6b7280" }}>Done</button>
                 </div>

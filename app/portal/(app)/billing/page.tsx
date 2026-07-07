@@ -2,11 +2,14 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { usePortalContext } from "@/components/portal/portal-context";
 import type { Client, ClientDocument } from "@/lib/supabase/types";
 import { ADVISOR_NAME, ADVISOR_EMAIL } from "@/lib/advisor";
 import { EmptyState } from "@/components/portal/empty-state";
+
+const CardManagement = dynamic(() => import("@/components/portal/card-management"), { ssr: false });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -311,6 +314,7 @@ function InvoiceModal({ doc, onClose }: { doc: ClientDocument; onClose: () => vo
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function BillingPage() {
+  const { activeClientId } = usePortalContext();
   const [client,         setClient]         = useState<Client | null>(null);
   const [invoiceDocs,    setInvoiceDocs]    = useState<ClientDocument[]>([]);
   const [paymentRecords, setPaymentRecords] = useState<Array<{ period_key: string; amount: number; status: string; paid_at: string | null }>>([]);
@@ -319,22 +323,22 @@ export default function BillingPage() {
   const [advisor,        setAdvisor]        = useState<{ name: string; email: string } | null>(null);
 
   useEffect(() => {
-    const sb = createClient();
+    if (!activeClientId) return;
+    setLoading(true);
     Promise.all([
-      sb.from("clients").select("*").maybeSingle() as unknown as Promise<{ data: Client | null }>,
-      sb.from("client_documents").select("*")
-        .eq("folder" as string, "Sparing Invoices")
-        .order("created_at", { ascending: false }) as unknown as Promise<{ data: ClientDocument[] | null }>,
+      fetch("/api/portal/client").then((r) => r.ok ? r.json() : null) as Promise<Client | null>,
+      fetch("/api/portal/documents").then((r) => r.ok ? r.json() : { folders: [], documents: [] }) as Promise<{ folders: Array<{ id: string; name: string; parent_id: string | null }>; documents: ClientDocument[] }>,
       fetch("/api/portal/payments").then((r) => r.ok ? r.json() : []) as Promise<Array<{ period_key: string; amount: number; status: string; paid_at: string | null }>>,
       fetch("/api/portal/advisor").then((r) => r.ok ? r.json() : null) as Promise<{ name: string; email: string } | null>,
-    ]).then(([cr, dr, pr, advisorRes]) => {
-      if (cr.data) setClient(cr.data);
-      setInvoiceDocs(dr.data ?? []);
+    ]).then(([clientRes, docsRes, pr, advisorRes]) => {
+      if (clientRes) setClient(clientRes);
+      const invoicesFolder = (docsRes.folders ?? []).find((f) => f.name === "Sparing Invoices" && !f.parent_id);
+      setInvoiceDocs((docsRes.documents ?? []).filter((d) => invoicesFolder && d.folder_id === invoicesFolder.id));
       setPaymentRecords(Array.isArray(pr) ? pr : []);
       if (advisorRes) setAdvisor(advisorRes);
       setLoading(false);
     });
-  }, []);
+  }, [activeClientId]);
 
   if (loading) return <div className="px-6 py-8 text-sm" style={{ color: "#9ca3af" }}>Loading…</div>;
   if (!client) return <div className="px-6 py-8 text-sm" style={{ color: "#9ca3af" }}>No billing data found.</div>;
@@ -363,6 +367,19 @@ export default function BillingPage() {
             client={client}
             onUpdate={(patch) => setClient((prev) => prev ? { ...prev, ...patch } : prev)}
           />
+        </motion.div>
+
+        {/* ── Payment methods ── */}
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.06 }}>
+          <div className="overflow-hidden rounded-2xl border bg-white" style={{ borderColor: "#ebecef", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+            <div className="border-b px-6 py-4" style={{ borderColor: "#f3f4f6" }}>
+              <h2 className="text-sm font-semibold" style={{ color: "#171717" }}>Payment Methods</h2>
+              <p className="text-xs" style={{ color: "#9ca3af" }}>Manage cards on file. At least one card is required.</p>
+            </div>
+            <div className="p-6">
+              <CardManagement />
+            </div>
+          </div>
         </motion.div>
 
         {/* ── Subscription card ── */}

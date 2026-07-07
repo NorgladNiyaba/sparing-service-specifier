@@ -1195,11 +1195,6 @@ export function PricingFlow() {
   const signatureBlockRef = useRef<HTMLDivElement>(null);
   const [pillVisible, setPillVisible] = useState(true);
   const lastScrollY = useRef(0);
-  const [portalPassword, setPortalPassword] = useState("");
-  const [portalPasswordConfirm, setPortalPasswordConfirm] = useState("");
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [passwordSaved, setPasswordSaved] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     const threshold = 12;
@@ -1344,43 +1339,16 @@ export function PricingFlow() {
     if (clientError) console.error("Client insert failed:", clientError.message);
 
     if (clientRow?.id) {
-      const folders = [
-        "Contract",
-        "Client Uploads",
-        "Agency Notices & Resolutions",
-        "Assets",
-        "Benefits Policy & Notices",
-        "Collection Files",
-        "Compliance",
-        "Forms",
-        "Human Resources",
-        "Inquiry",
-        "Monthly Accounting",
-        "Monthly Check, Cash and Other Payments",
-        "Other Services",
-        "Payroll",
-        "Payroll Quarterly & Annual Filings",
-        "Quarterly Accounting",
-        "Receipts",
-        "Sparing Invoices",
-        "Tax Credits",
-        "Taxes",
-        "Weekly Accomplishments",
-      ];
-      const { error: foldersError } = await (supabase.from("client_folders").insert(
-        folders.map((name) => ({ client_id: clientRow.id, name }))
-      ) as unknown as Promise<{ error: { message: string } | null }>);
-      if (foldersError) console.error("Folders insert failed:", foldersError.message);
-
-      const { error: docError } = await (supabase.from("client_documents").insert({
-        client_id: clientRow.id,
-        name: `Service Agreement — ${recommendation.serviceTrack.toUpperCase()}`,
-        type: "Contract",
-        storage_path: "__contract__",
-        folder: "Contract",
-        is_seen: false,
-      } as Record<string, unknown>) as unknown as Promise<{ error: { message: string } | null }>);
-      if (docError) console.error("Contract document insert failed:", docError.message);
+      // All post-signup setup runs server-side (admin client) so RLS can't block it
+      await fetch("/api/portal/setup-contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: clientRow.id,
+          authUserId: authData.user.id,
+          serviceTrack: recommendation.serviceTrack.toUpperCase(),
+        }),
+      }).catch(() => {});
     }
 
     setStep("confirmation");
@@ -2812,74 +2780,12 @@ export function PricingFlow() {
               <span className="text-white/55">{form.contactEmail || "your email"}</span>
             </motion.div>
 
-            {/* Password setup */}
+            {/* Action buttons */}
             <motion.div
-              className="mt-8 w-full max-w-sm"
+              className="mt-8 flex flex-col items-center gap-3 sm:flex-row"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1.22, duration: 0.45 }}
-            >
-              {passwordSaved ? (
-                <div className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 px-5 py-4" style={{ background: "rgba(255,255,255,0.04)" }}>
-                  <svg className="h-4 w-4 shrink-0" style={{ color: "#4ade80" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-sm font-medium text-white/70">Portal password set — you&apos;re all set.</span>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-white/10 px-5 py-5" style={{ background: "rgba(255,255,255,0.04)" }}>
-                  <p className="mb-1 text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-white/35">Set your portal password</p>
-                  <p className="mb-4 text-xs text-white/30">Choose a password so you can sign back in to your portal any time.</p>
-                  <div className="space-y-2.5">
-                    <input
-                      type="password"
-                      placeholder="New password"
-                      value={portalPassword}
-                      onChange={(e) => { setPortalPassword(e.target.value); setPasswordError(""); }}
-                      className="w-full rounded-xl px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-white/20"
-                      style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-                      onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(214,27,23,0.5)")}
-                      onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
-                    />
-                    <input
-                      type="password"
-                      placeholder="Confirm password"
-                      value={portalPasswordConfirm}
-                      onChange={(e) => { setPortalPasswordConfirm(e.target.value); setPasswordError(""); }}
-                      className="w-full rounded-xl px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-white/20"
-                      style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-                      onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(214,27,23,0.5)")}
-                      onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)")}
-                    />
-                    {passwordError && <p className="text-xs" style={{ color: "#f87171" }}>{passwordError}</p>}
-                    <button
-                      type="button"
-                      disabled={passwordSaving || !portalPassword}
-                      onClick={async () => {
-                        if (portalPassword.length < 8) { setPasswordError("Password must be at least 8 characters."); return; }
-                        if (portalPassword !== portalPasswordConfirm) { setPasswordError("Passwords don't match."); return; }
-                        setPasswordSaving(true);
-                        const supabase = createClient();
-                        const { error } = await supabase.auth.updateUser({ password: portalPassword, data: { password_configured: true } });
-                        if (error) { setPasswordError(error.message); setPasswordSaving(false); return; }
-                        setPasswordSaved(true);
-                      }}
-                      className="w-full rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
-                      style={{ background: "#d61b17" }}
-                    >
-                      {passwordSaving ? "Saving…" : "Set password"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-
-            {/* Action buttons */}
-            <motion.div
-              className="mt-6 flex flex-col items-center gap-3 sm:flex-row"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.35, duration: 0.45 }}
             >
               <button
                 type="button"
@@ -2891,10 +2797,10 @@ export function PricingFlow() {
                 Download agreement
               </button>
               <a
-                href="/portal/dashboard"
+                href="/portal/setup-password"
                 className="inline-flex h-11 items-center gap-2 rounded-full bg-[var(--brand-red)] px-6 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(214,27,23,0.3)] transition duration-200 hover:-translate-y-px hover:bg-[var(--brand-red-deep)] hover:shadow-[0_12px_32px_rgba(214,27,23,0.38)]"
               >
-                Enter your portal
+                Next
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                 </svg>

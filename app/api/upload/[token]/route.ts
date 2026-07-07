@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const remaining = row.max_files - row.file_count;
   return NextResponse.json({
     label: row.label,
-    targetFolder: row.target_folder,
+    targetFolderId: row.target_folder_id,
     remaining,
     maxFiles: row.max_files,
   });
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     .from("upload_requests")
     .select("*, clients(id, email)")
     .eq("token", token)
-    .single() as unknown as { data: { id: string; client_id: string; label: string; target_folder: string; max_files: number; file_count: number; expires_at: string; revoked: boolean; clients: { id: string; email: string } | null } | null; error: unknown };
+    .single() as unknown as { data: { id: string; client_id: string; label: string; target_folder_id: string | null; max_files: number; file_count: number; expires_at: string; revoked: boolean; clients: { id: string; email: string } | null } | null; error: unknown };
 
   if (rowErr || !row) return NextResponse.json({ error: "Link not found." }, { status: 404 });
   if (row.revoked) return NextResponse.json({ error: "This link has been revoked." }, { status: 410 });
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       type: "Upload",
       storage_path: storagePath,
       size_bytes: file.size,
-      folder: row.target_folder,
+      folder_id: row.target_folder_id,
       is_seen: true,
     } as Record<string, unknown>)
     .select()

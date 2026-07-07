@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SkeletonRows } from "@/components/admin/skeleton";
 
 interface ClientSummary {
@@ -61,6 +62,7 @@ function CopyEmailButton({ email }: { email: string }) {
     <button
       onClick={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         navigator.clipboard.writeText(email).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); });
       }}
       title="Copy email"
@@ -225,6 +227,7 @@ export default function AdminClientsPage() {
   }
 
   const col = (key: ColKey) => visibleCols.has(key);
+  const router = useRouter();
 
   return (
     <div className="px-8 py-8">
@@ -389,8 +392,9 @@ export default function AdminClientsPage() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.22, delay: i * 0.02 }}
-                  className="group transition-colors hover:bg-[#fafafa]"
+                  className="group cursor-pointer transition-colors hover:bg-[#f0f4ff]"
                   style={{ borderBottom: i < clients.length - 1 ? "1px solid #f3f4f6" : "none" }}
+                  onClick={() => router.push(`/admin/clients/${client.id}`)}
                 >
                   {col("client") && (
                     <td className="px-5 py-4">
@@ -443,7 +447,7 @@ export default function AdminClientsPage() {
                       )}
                     </td>
                   )}
-                  <td className="px-5 py-4 text-right">
+                  <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                     <Link
                       href={`/admin/clients/${client.id}`}
                       className="rounded-lg border px-3 py-1.5 text-xs font-medium transition hover:border-[#1d4ed8] hover:text-[#1d4ed8]"

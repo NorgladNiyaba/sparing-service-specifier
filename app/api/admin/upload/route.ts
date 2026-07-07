@@ -12,11 +12,11 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file     = formData.get("file") as File | null;
   const clientId = formData.get("clientId") as string;
-  const folder   = formData.get("folder") as string;
+  const folderId = formData.get("folder_id") as string;
   const docName  = (formData.get("name") as string) || file?.name || "Untitled";
   const docType  = (formData.get("type") as string) || "Report";
 
-  if (!file || !clientId || !folder) {
+  if (!file || !clientId || !folderId) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const { data: doc, error: insertError } = await admin
     .from("client_documents")
-    .insert({ client_id: clientId, name: docName, type: docType, storage_path: storagePath, folder, size_bytes: file.size, is_seen: false })
+    .insert({ client_id: clientId, name: docName, type: docType, storage_path: storagePath, folder_id: folderId, size_bytes: file.size, is_seen: false })
     .select()
     .single();
 
@@ -47,19 +47,21 @@ export async function POST(request: NextRequest) {
     entityType:  "document",
     entityId:    doc.id,
     entityLabel: docName,
-    changes:     { folder, type: docType, size_bytes: file.size },
+    changes:     { folder_id: folderId, type: docType, size_bytes: file.size },
   });
 
   // Email notification (non-blocking)
   const { data: client } = await admin.from("clients").select("full_name, email, auth_user_id").eq("id", clientId).maybeSingle();
   if (client?.email) {
+    const { data: folderRow } = await admin.from("client_folders").select("name").eq("id", folderId).maybeSingle();
+    const folderName = folderRow?.name ?? "Documents";
     let notifyEnabled = true;
     if (client.auth_user_id) {
       const { data: userData } = await admin.auth.admin.getUserById(client.auth_user_id);
       notifyEnabled = userData?.user?.user_metadata?.notifications_new_documents !== false;
     }
     if (notifyEnabled) {
-      void sendNewDocumentNotification({ toEmail: client.email, toName: client.full_name, docName, folder, docType, advisorName: ADVISOR_NAME, advisorEmail: ADVISOR_EMAIL });
+      void sendNewDocumentNotification({ toEmail: client.email, toName: client.full_name, docName, folder: folderName, docType, advisorName: ADVISOR_NAME, advisorEmail: ADVISOR_EMAIL });
     }
   }
 

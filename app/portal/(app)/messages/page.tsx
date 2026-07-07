@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ADVISOR_NAME } from "@/lib/advisor";
+import { usePortalContext } from "@/components/portal/portal-context";
 import type { ClientMessage } from "@/lib/supabase/types";
 
 function formatTime(iso: string) {
@@ -12,6 +13,30 @@ function formatTime(iso: string) {
   if (isToday) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " · " +
     d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function MessageTicks({ read, pending }: { read: boolean; pending: boolean }) {
+  if (pending) {
+    return (
+      <svg className="h-3 w-3 shrink-0" style={{ color: "#d1d5db" }} fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="8" cy="8" r="5.5" />
+        <path d="M8 5.5v2.5l1.75 1.75" />
+      </svg>
+    );
+  }
+  if (read) {
+    return (
+      <svg className="h-3.5 w-3.5 shrink-0" style={{ color: "#d61b17" }} fill="none" viewBox="0 0 20 12" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 6l4 4 6.5-8" />
+        <path d="M6.5 6l4 4 6.5-8" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0" style={{ color: "#9ca3af" }} fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 6l4 4 6-8" />
+    </svg>
+  );
 }
 
 function groupByDate(messages: ClientMessage[]) {
@@ -26,28 +51,40 @@ function groupByDate(messages: ClientMessage[]) {
 }
 
 export default function MessagesPage() {
-  const [messages,  setMessages]  = useState<ClientMessage[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [body,      setBody]      = useState("");
-  const [sending,   setSending]   = useState(false);
+  const { activeClientId } = usePortalContext();
+  const [messages,     setMessages]     = useState<ClientMessage[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [body,         setBody]         = useState("");
+  const [sending,      setSending]      = useState(false);
+  const [advisorName,  setAdvisorName]  = useState(ADVISOR_NAME);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchMessages = useCallback(async () => {
+    if (!activeClientId) return;
     const res = await fetch("/api/portal/messages");
     if (!res.ok) return;
     const data = await res.json() as ClientMessage[];
     setMessages(data);
     setLoading(false);
-  }, []);
+  }, [activeClientId]);
 
-  useEffect(() => { void fetchMessages(); }, [fetchMessages]);
+  useEffect(() => {
+    if (!activeClientId) return;
+    setLoading(true);
+    void fetchMessages();
+    fetch("/api/portal/advisor")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { name: string } | null) => { if (d?.name) setAdvisorName(d.name); })
+      .catch(() => {});
+  }, [activeClientId, fetchMessages]);
 
   // Poll every 30s for new messages
   useEffect(() => {
+    if (!activeClientId) return;
     const id = setInterval(() => { void fetchMessages(); }, 30_000);
     return () => clearInterval(id);
-  }, [fetchMessages]);
+  }, [activeClientId, fetchMessages]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -105,10 +142,10 @@ export default function MessagesPage() {
       <div className="shrink-0 border-b bg-white px-6 py-4" style={{ borderColor: "#ebecef" }}>
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: "#d61b17" }}>
-            {ADVISOR_NAME.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+            {advisorName.split(" ").map((n) => n[0]).join("").slice(0, 2)}
           </div>
           <div>
-            <p className="text-sm font-semibold" style={{ color: "#171717" }}>{ADVISOR_NAME}</p>
+            <p className="text-sm font-semibold" style={{ color: "#171717" }}>{advisorName}</p>
             <p className="text-xs" style={{ color: "#9ca3af" }}>Your Sparing advisor · replies within 1 business day</p>
           </div>
         </div>
@@ -155,7 +192,7 @@ export default function MessagesPage() {
                         >
                           <div className={`flex max-w-[75%] flex-col gap-1 ${isClient ? "items-end" : "items-start"}`}>
                             {!isClient && (
-                              <span className="ml-1 text-[0.65rem] font-semibold" style={{ color: "#9ca3af" }}>{ADVISOR_NAME}</span>
+                              <span className="ml-1 text-[0.65rem] font-semibold" style={{ color: "#9ca3af" }}>{advisorName}</span>
                             )}
                             <div
                               className="rounded-2xl px-4 py-2.5 text-sm leading-relaxed"
@@ -167,7 +204,10 @@ export default function MessagesPage() {
                                 <span key={i}>{line}{i < msg.body.split("\n").length - 1 && <br />}</span>
                               ))}
                             </div>
-                            <span className="mx-1 text-[0.6rem]" style={{ color: "#9ca3af" }}>{formatTime(msg.created_at)}</span>
+                            <div className="mx-1 flex items-center gap-1">
+                              <span className="text-[0.6rem]" style={{ color: "#9ca3af" }}>{formatTime(msg.created_at)}</span>
+                              {isClient && <MessageTicks read={msg.is_read} pending={msg.client_id === ""} />}
+                            </div>
                           </div>
                         </motion.div>
                       );

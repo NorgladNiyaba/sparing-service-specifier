@@ -1,53 +1,76 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-const WARN_BEFORE_S = 5 * 60; // show warning 5 min before expiry
+const WARN_BEFORE_S = 5 * 60;
 
 export function SessionGuard({ children }: { children: React.ReactNode }) {
   const [showWarning, setShowWarning] = useState(false);
   const [countdown,   setCountdown]   = useState(WARN_BEFORE_S);
   const [extending,   setExtending]   = useState(false);
+  const warnTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const autoRefreshBlocked = useRef(false);
 
-  useEffect(() => {
-    let warnTimer: ReturnType<typeof setTimeout>;
-    let countdownInterval: ReturnType<typeof setInterval>;
+  const init = useCallback(async () => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.expires_at) return;
 
-    async function init() {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.expires_at) return;
-
-      const expiresInMs = session.expires_at * 1000 - Date.now();
-      if (expiresInMs <= 0) { window.location.href = "/portal/login"; return; }
-
-      const msUntilWarn = expiresInMs - WARN_BEFORE_S * 1000;
-
-      if (msUntilWarn <= 0) {
-        // Already inside the warning window
-        const remaining = Math.max(0, Math.floor(expiresInMs / 1000));
-        setCountdown(remaining);
-        setShowWarning(true);
-      } else {
-        warnTimer = setTimeout(() => {
-          setCountdown(WARN_BEFORE_S);
-          setShowWarning(true);
-        }, msUntilWarn);
-      }
+    const expiresInMs = session.expires_at * 1000 - Date.now();
+    if (expiresInMs <= 0) {
+      await supabase.auth.signOut();
+      window.location.href = "/portal/login";
+      return;
     }
 
-    void init();
-    return () => { clearTimeout(warnTimer); clearInterval(countdownInterval); };
+    const msUntilWarn = expiresInMs - WARN_BEFORE_S * 1000;
+
+    if (msUntilWarn <= 0) {
+      const remaining = Math.max(0, Math.floor(expiresInMs / 1000));
+      setCountdown(remaining);
+      setShowWarning(true);
+      autoRefreshBlocked.current = true;
+    } else {
+      clearTimeout(warnTimerRef.current);
+      warnTimerRef.current = setTimeout(() => {
+        setCountdown(WARN_BEFORE_S);
+        setShowWarning(true);
+        autoRefreshBlocked.current = true;
+      }, msUntilWarn);
+    }
   }, []);
 
-  // Live countdown while warning is visible
+  useEffect(() => {
+    void init();
+
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "TOKEN_REFRESHED" && autoRefreshBlocked.current) {
+        supabase.auth.signOut().then(() => {
+          window.location.href = "/portal/login";
+        });
+      }
+    });
+
+    return () => {
+      clearTimeout(warnTimerRef.current);
+      subscription.unsubscribe();
+    };
+  }, [init]);
+
   useEffect(() => {
     if (!showWarning) return;
     const interval = setInterval(() => {
       setCountdown((c) => {
-        if (c <= 1) { window.location.href = "/portal/login"; return 0; }
+        if (c <= 1) {
+          const supabase = createClient();
+          supabase.auth.signOut().then(() => {
+            window.location.href = "/portal/login";
+          });
+          return 0;
+        }
         return c - 1;
       });
     }, 1000);
@@ -56,11 +79,17 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
 
   async function extendSession() {
     setExtending(true);
+    autoRefreshBlocked.current = false;
     const supabase = createClient();
     const { error } = await supabase.auth.refreshSession();
-    if (error) { window.location.href = "/portal/login"; return; }
+    if (error) {
+      await supabase.auth.signOut();
+      window.location.href = "/portal/login";
+      return;
+    }
     setShowWarning(false);
     setExtending(false);
+    void init();
   }
 
   async function signOut() {
@@ -94,7 +123,6 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
               className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl"
               style={{ boxShadow: "0 24px 80px rgba(0,0,0,0.25)" }}
             >
-              {/* Countdown strip */}
               <div className="h-1 w-full" style={{ background: "#f3f4f6" }}>
                 <motion.div
                   className="h-full"
