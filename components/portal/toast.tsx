@@ -50,7 +50,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <Ctx.Provider value={{ toast }}>
       {children}
       {/* Toaster */}
-      <div className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2.5" style={{ maxWidth: 360 }}>
+      {/* z-index sits above the onboarding overlay (180) so its confirmations are
+          visible, but below the session-expiry modal (200). */}
+      <div className="fixed bottom-5 right-5 z-[190] flex flex-col gap-2.5" style={{ maxWidth: 360 }}>
         <AnimatePresence mode="popLayout">
           {toasts.map((t) => {
             const s = STYLES[t.type];

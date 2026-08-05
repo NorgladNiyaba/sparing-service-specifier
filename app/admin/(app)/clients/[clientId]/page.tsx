@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Client, ClientDocument, ClientFolder } from "@/lib/supabase/types";
 import { SkeletonClientDetail } from "@/components/admin/skeleton";
 import { useAdminUser, canWrite } from "@/components/admin/user-context";
+import { ClientProfilePanel } from "@/components/admin/client-profile-panel";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -622,6 +623,9 @@ export default function AdminClientDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ── Client profile (portal onboarding) ── */}
+      <ClientProfilePanel client={client} documents={documents} />
 
       {/* ── Messages ── */}
       <div className="mb-10 rounded-2xl border bg-white overflow-hidden" style={{ borderColor: "#ebecef" }}>

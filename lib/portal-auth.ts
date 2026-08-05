@@ -45,8 +45,12 @@ export async function getPortalSession(): Promise<PortalSession | null> {
 
     if (!access || access.length === 0) return null;
 
+    type JoinedClient = { id: string; full_name: string; company_name: string | null };
+
     availableClients = access.map((a) => {
-      const cl = a.clients as { id: string; full_name: string; company_name: string | null } | null;
+      // Supabase types the embedded relation as an array; a many-to-one FK yields one row.
+      const raw = a.clients as unknown as JoinedClient | JoinedClient[] | null;
+      const cl  = Array.isArray(raw) ? raw[0] ?? null : raw;
       return {
         clientId: a.client_id as string,
         companyName: cl?.company_name ?? null,

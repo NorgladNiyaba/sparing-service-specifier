@@ -10,7 +10,7 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
   const [showWarning, setShowWarning] = useState(false);
   const [countdown,   setCountdown]   = useState(WARN_BEFORE_S);
   const [extending,   setExtending]   = useState(false);
-  const warnTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const warnTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const autoRefreshBlocked = useRef(false);
 
   const init = useCallback(async () => {

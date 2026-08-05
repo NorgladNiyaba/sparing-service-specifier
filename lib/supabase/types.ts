@@ -18,6 +18,11 @@ export interface Database {
         Insert: ClientUploadInsert;
         Update: Partial<ClientUploadInsert>;
       };
+      client_onboarding: {
+        Row: ClientOnboardingRow;
+        Insert: ClientOnboardingInsert;
+        Update: Partial<ClientOnboardingInsert>;
+      };
     };
   };
 }
@@ -61,6 +66,20 @@ export interface ClientRow {
   signed_at: string;
   created_at: string;
   updated_at: string;
+
+  /* Collected during portal onboarding — see lib/onboarding.ts */
+  logo_path: string | null;
+  primary_contact_name: string | null;
+  primary_contact_title: string | null;
+  primary_contact_email: string | null;
+  primary_contact_phone: string | null;
+  entity_type: string | null;
+  industry: string | null;
+  employee_range: string | null;
+  fiscal_year_end: string | null;
+  preferred_contact_method: string | null;
+  best_time_to_reach: string | null;
+  client_timezone: string | null;
 }
 
 export interface ClientInsert {
@@ -79,6 +98,20 @@ export interface ClientInsert {
   billing_zip?: string | null;
   internal_notes?: string | null;
   signed_at?: string;
+
+  /* Collected during portal onboarding — see lib/onboarding.ts */
+  logo_path?: string | null;
+  primary_contact_name?: string | null;
+  primary_contact_title?: string | null;
+  primary_contact_email?: string | null;
+  primary_contact_phone?: string | null;
+  entity_type?: string | null;
+  industry?: string | null;
+  employee_range?: string | null;
+  fiscal_year_end?: string | null;
+  preferred_contact_method?: string | null;
+  best_time_to_reach?: string | null;
+  client_timezone?: string | null;
 }
 
 export interface ClientDocumentRow {
@@ -213,7 +246,31 @@ export interface ContactClientAccessRow {
   created_at: string;
 }
 
+export interface ClientOnboardingRow {
+  client_id:     string;
+  /** Explicit per-step overrides, e.g. { logo: "skipped" }. Completion is derived. */
+  steps:         Record<string, string>;
+  welcomed_at:   string | null;
+  dismissed_at:  string | null;
+  completed_at:  string | null;
+  celebrated_at: string | null;
+  last_step:     string | null;
+  created_at:    string;
+  updated_at:    string;
+}
+
+export interface ClientOnboardingInsert {
+  client_id:      string;
+  steps?:         Record<string, string>;
+  welcomed_at?:   string | null;
+  dismissed_at?:  string | null;
+  completed_at?:  string | null;
+  celebrated_at?: string | null;
+  last_step?:     string | null;
+}
+
 // Convenience aliases
+export type ClientOnboarding = ClientOnboardingRow;
 export type Contact = ContactRow;
 export type ContactClientAccess = ContactClientAccessRow;
 export type Advisor = AdvisorRow;

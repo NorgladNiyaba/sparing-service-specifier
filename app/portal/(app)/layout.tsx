@@ -5,6 +5,8 @@ import Sidebar from "@/components/portal/sidebar";
 import { ToastProvider } from "@/components/portal/toast";
 import { SessionGuard } from "@/components/portal/session-guard";
 import { PortalProvider } from "@/components/portal/portal-context";
+import { OnboardingProvider } from "@/components/portal/onboarding-context";
+import { OnboardingOverlay } from "@/components/portal/onboarding-overlay";
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -13,6 +15,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     <ToastProvider>
     <SessionGuard>
     <PortalProvider>
+    <OnboardingProvider>
       <div className="flex h-screen overflow-hidden">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
@@ -43,6 +46,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           </main>
         </div>
       </div>
+
+      {/* Onboarding lives above the portal chrome and is always dismissible */}
+      <OnboardingOverlay />
+    </OnboardingProvider>
     </PortalProvider>
     </SessionGuard>
     </ToastProvider>
